@@ -1,0 +1,37 @@
+name: Notify Studio of a firmware release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    if: ${{ !github.event.release.prerelease && !github.event.release.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify release on main
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          git merge-base --is-ancestor HEAD refs/remotes/origin/main
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          if [[ "$latest" == "$RELEASE_TAG" ]]; then echo 'latest=true' >> "$GITHUB_OUTPUT"; fi
+      - name: Dispatch Studio deployment
+        if: steps.verify.outputs.latest == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.STUDIO_DISPATCH_TOKEN }}
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo '::warning::STUDIO_DISPATCH_TOKEN is missing; run Deploy Split-Beat HE Studio manually.'
+            exit 0
+          fi
+          gh api --method POST repos/CodeKi0303/split-beat-he-studio/actions/workflows/deploy-studio.yml/dispatches -f ref=main

@@ -1,0 +1,26 @@
+# Split-Beat HE · Firmware
+
+C86 스플릿 홀 이펙트 컨트롤러용 STM32 펌웨어입니다. 좌우 앱과 SWD 초기 설치용 부팅부, 센서 캘리브레이션·Rapid Trigger·매핑을 제어하는 로컬 MCP 도구가 포함되어 있습니다.
+
+## 사용
+
+- 새 보드는 [최초 SWD 기록](C86-FIRST-FLASH.md)을 진행합니다. 이미 부팅부가 설치되어 있으면 [릴리스](https://github.com/CodeKi0303/split-beat-he-firmware/releases)의 좌우 `*.fw.json`을 [Studio](https://studio.codekilab.com/)의 펌웨어 화면에서 설치합니다.
+- PC는 왼쪽 PC 포트에 연결합니다. 오른쪽은 왼쪽 split 포트로 연결하며, 업데이트도 왼쪽을 통해 중계합니다.
+- [로컬 MCP 설치와 보정](docs/MCP-CONTROL.md), [USB 업데이트 프로토콜](docs/FIRMWARE-UPDATE.md), [하드웨어 제작](https://github.com/CodeKi0303/split-beat-he-hardware), [Studio 소스](https://github.com/CodeKi0303/split-beat-he-studio).
+
+## 빌드와 검증
+
+Python과 ARM GNU Toolchain을 준비합니다. 툴체인이 PATH에 없으면 `--toolchain`에 `bin` 디렉터리를 전달합니다.
+
+```sh
+python build.py --hardware c86 --role both --scan-hz 96000 --adc-async96
+python tools/verify_images.py --hardware c86 --role both --scan-hz 96000 --adc-async96
+python -m pip install -r host/requirements-lock.txt
+python tools/check_all.py --firmware
+```
+
+동일 디렉터리에 Studio도 클론했다면 `python tools/check_all.py --studio ../split-beat-he-studio`로 C·Python·JavaScript의 프로토콜과 Hall 곡선 일치까지 확인할 수 있습니다. 검사는 오프라인이며 하드웨어 기록을 실행하지 않습니다.
+
+정식 릴리스에는 실기 검증된 좌우 앱을 같은 이름으로 첨부합니다. 한쪽만 수정했으면 다른 쪽은 직전 검증본을 첨부합니다. `main`에 포함된 커밋의 릴리스가 최신으로 게시되면 Studio에 배포 요청을 전달합니다. 요청용 Secret은 `STUDIO_DISPATCH_TOKEN`이며 Studio 저장소의 Actions 쓰기 권한만 필요합니다.
+
+직접 작성한 코드는 [MIT](LICENSE)입니다. 번들 라이브러리별 라이선스와 출처는 [THIRD_PARTY.md](THIRD_PARTY.md)를 참조하세요.

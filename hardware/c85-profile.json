@@ -1,0 +1,67 @@
+{
+  "hardware_profile": "c85",
+  "status": "PIN_NETS_VERIFIED_AGAINST_FROZEN_C85_PCB_PHYSICAL_HARDWARE_UNTESTED",
+  "base_pin_manifest": "c77-pin-manifest.json",
+  "gpio_mapping_changed": false,
+  "pcb_layers": 6,
+  "mcu": "STM32H723VGT6",
+  "hse": {
+    "part": "TAITIEN OXETDLJANF-25MHZ",
+    "hz": 25000000,
+    "mode": "bypass",
+    "enable": "PD4 high"
+  },
+  "split_cc": {
+    "part": "FUSB303BTMX",
+    "jlc_part": "C895444",
+    "i2c": "I2C1 PB8 SCL / PB9 SDA",
+    "i2c_address_7bit": "0x21",
+    "i2c_pullups": "R701/R702 4.7k to 3.3 V",
+    "accepted_device_id": "0x10; fail closed on unreviewed silicon revisions",
+    "port_strap": "887k pull-up: source only",
+    "address_strap": "887k pull-down: I2C address 0x21",
+    "vbus_sense_series": "0 ohm, replacing TI 909k",
+    "enable_n": "PE15",
+    "id_n": "PE8",
+    "interrupt_n": "PE7",
+    "power_block": "PD15 high disables downstream supply",
+    "fault_n": "PE9",
+    "initial_registers_while_power_blocked": {
+      "PORTROLE": "0x41",
+      "CONTROL_masked": "0x43",
+      "CONTROL1_disabled": "0x23"
+    },
+    "operational_registers_after_enable": {
+      "PORTROLE": "0x41",
+      "CONTROL_unmasked": "0x42",
+      "CONTROL1_enabled": "0x2b"
+    },
+    "current_advertisement": "Default USB current only; no 1.5 A or 3 A",
+    "cable_policy": "Only TYPE 0x08 Attached.SRC is accepted. TYPE.ACTIVECABLE/Ra is rejected; e-marked or VCONN-dependent cables may not power the satellite. Compatibility with every USB-C cable is not claimed.",
+    "startup_us": 100000,
+    "poll_interval_us": 10000,
+    "transaction_timeout_us": 5000,
+    "max_cached_status_us": 20000,
+    "fault_recovery": "Latch off until upstream USB unconfiguration, then complete reinitialization",
+    "datasheet": "https://www.onsemi.com/pdf/datasheet/fusb303b-d.pdf",
+    "datasheet_revision": "September 2024 Rev 3"
+  },
+  "hardware_validated": false,
+  "remaining": [
+    "Measure I2C timing with real pullups and capacitance",
+    "Confirm CC attach, detach, reset, brownout and load-switch fault behavior",
+    "Measure full keyboard upstream current budget",
+    "Measure USB HS, ADC and RS-485 behavior"
+  ],
+  "pin_manifest": "c85-pin-manifest.json",
+  "pin_manifest_sha256": "7910798cfa9e283ba710128b18c8b00d94fc97b5a2d0bba00193f090b07829db",
+  "native_board_path": "output/rev-c85-six-layer/pcb/split-hall-c85-six-layer-REVIEW-NOT-ORDER.kicad_pcb",
+  "native_board_sha256": "a27ad07be4c3ade597001ce87130bfc01400f5017e76f9c338fb42de0dc5bbb1",
+  "pin_binding": {
+    "all_mcu_pads_checked": 200,
+    "connected_mcu_pads_crosschecked_with_original_schematic": 103,
+    "mismatches": 0,
+    "all_prior_gpio_nets_preserved": true,
+    "strap_and_sense_component_values_verified": true
+  }
+}

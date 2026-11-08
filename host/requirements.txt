@@ -1,0 +1,2 @@
+# Official SDK stable release verified 2026-10-15 against PyPI and upstream.
+mcp==2.3.0

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "split_keyboard": {
+      "command": "C:/path/to/split-beat-he-firmware/.venv/Scripts/python.exe",
+      "args": [
+        "C:/path/to/split-beat-he-firmware/host/run_mcp.py"
+      ]
+    }
+  }
+}

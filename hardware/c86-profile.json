@@ -1,0 +1,144 @@
+{
+  "hardware_profile": "c86",
+  "status": "C86_FROZEN_PIN_BINDING_AND_FACTORY_DNP_REVIEWED_PHYSICAL_HARDWARE_UNTESTED",
+  "base_pin_manifest": "c85-pin-manifest.json",
+  "gpio_mapping_changed": false,
+  "pcb_layers": 4,
+  "mcu": "STM32H723VGT6",
+  "hse": {
+    "part": "TAITIEN OXETDLJANF-25MHZ",
+    "hz": 25000000,
+    "mode": "bypass",
+    "enable": "PD4 high"
+  },
+  "split_cc": {
+    "part": "FUSB303BTMX",
+    "jlc_part": "C895444",
+    "i2c": "I2C1 PB8 SCL / PB9 SDA",
+    "i2c_address_7bit": "0x21",
+    "i2c_pullups": "R701/R702 4.7k to 3.3 V",
+    "accepted_device_id": "0x10; fail closed on unreviewed silicon revisions",
+    "port_strap": "887k pull-up: source only",
+    "address_strap": "887k pull-down: I2C address 0x21",
+    "vbus_sense_series": "0 ohm, replacing TI 909k",
+    "enable_n": "PE15",
+    "id_n": "PE8",
+    "interrupt_n": "PE7",
+    "power_block": "PD15 high disables downstream supply",
+    "fault_n": "PE9",
+    "initial_registers_while_power_blocked": {
+      "PORTROLE": "0x41",
+      "CONTROL_masked": "0x43",
+      "CONTROL1_disabled": "0x23"
+    },
+    "operational_registers_after_enable": {
+      "PORTROLE": "0x41",
+      "CONTROL_unmasked": "0x42",
+      "CONTROL1_enabled": "0x2b"
+    },
+    "current_advertisement": "Default USB current only; no 1.5 A or 3 A",
+    "cable_policy": "Only TYPE 0x08 Attached.SRC is accepted. TYPE.ACTIVECABLE/Ra is rejected; e-marked or VCONN-dependent cables may not power the satellite. Compatibility with every USB-C cable is not claimed.",
+    "startup_us": 100000,
+    "poll_interval_us": 10000,
+    "transaction_timeout_us": 5000,
+    "max_cached_status_us": 20000,
+    "fault_recovery": "Latch off until upstream USB unconfiguration, then complete reinitialization",
+    "datasheet": "https://www.onsemi.com/download/data-sheet/pdf/fusb303b-d.pdf",
+    "datasheet_revision": "September 2024 Rev 3",
+    "enable_n_gpio_mode": "GPIO_MODE_OUTPUT_OD",
+    "enable_n_gpio_pull": "GPIO_NOPULL",
+    "enable_n_inactive": "ODR=1 releases to the FUSB303B internal bias, not driven 3.3 V",
+    "enable_n_active": "ODR=0 drives low",
+    "external_enable_pullup": "R609 DNP in final factory-reviewed assembly; preserve that assembly and selected open-drain policy. Rev2 and Rev3 EN_N rating differences are recorded separately.",
+    "enable_n_absolute_max_v": 6.0,
+    "enable_n_absolute_max_source": "Current FUSB303B/D September 2024 Rev3, Table4 p7 VIO. Earlier April 2022 Rev2 separately limits EN_N to 2.0 V; reason for document difference is unknown. Absolute maxima are not recommended drive voltages.",
+    "enable_n_absolute_max_v_by_datasheet_revision": {
+      "April 2022 Rev2": 2.0,
+      "September 2024 Rev3": 6.0
+    }
+  },
+  "hardware_validated": false,
+  "remaining": [
+    "Inspect received assembly against final R609 DNP record; verify actual EN_N startup/release timing with the selected open-drain policy",
+    "First SWD connect/readback, verify target voltage, identity and Flash size; no automatic programming",
+    "Measure I2C timing with real pullups and capacitance",
+    "Confirm CC attach, detach, reset, brownout and load-switch fault behavior",
+    "Measure full keyboard upstream current budget",
+    "Measure USB HS, ADC and RS-485 behavior"
+  ],
+  "pin_manifest": "c86-pin-manifest.json",
+  "pin_manifest_sha256": "356103877834e7648965cc02f0bea94cfd28002d61dcb7089f31e2209e6b194f",
+  "native_board_path": "output/rev-c86-four-layer/pcb/split-hall-c86-four-layer-REVIEW-NOT-ORDER.kicad_pcb",
+  "native_board_sha256": "9506395de840c2e92e71aa0ee413aa796cf0d1ef1208b4ef612b00a394b7c829",
+  "pin_binding": {
+    "all_mcu_pads_checked": 200,
+    "connected_mcu_pads_crosschecked_with_original_schematic": 103,
+    "mismatches": 0,
+    "all_prior_gpio_nets_preserved": true,
+    "strap_and_sense_component_values_verified": true,
+    "all_footprints_checked_against_c85": 307,
+    "all_numbered_pad_net_pairs_checked_against_c85": 829,
+    "native_net_mismatches_against_c85": 0,
+    "c86_pcb_derived_schematic_connected_mcu_pads_checked": 103
+  },
+  "assembly_overrides": {
+    "R609": {
+      "value": "RC0603FR-07100KL",
+      "jlc_part": "C14675",
+      "native_board_contains_footprint_and_copper": true,
+      "reviewed_factory_assemble": "No",
+      "reason": "Preserve the final factory-reviewed order configuration: external 100k EN_N pull-up omitted.",
+      "review_date_kst": "2026-10-23",
+      "batch": "W2026101703599008",
+      "evidence_paths": [
+        "output/order-prep/c86-swd-corrected-review-20261023/READY-FOR-USER-CONFIRMATION.json",
+        "output/order-prep/c86-swd-corrected-review-20261023/assembled-rows.json",
+        "output/order-prep/c86-swd-corrected-review-20261023/R609-still-DNP.png"
+      ],
+      "physical_absence_verified": false,
+      "other_C14675_per_panel_retained": 17,
+      "selected_firmware_policy": "PE15 GPIO_MODE_OUTPUT_OD + GPIO_NOPULL; high releases EN_N, low enables. This is a policy for the reviewed DNP assembly, not the sole electrically valid drive method."
+    }
+  },
+  "upstream_usb": {
+    "connector": "J401, left only",
+    "phy": "USB3300-EZK external ULPI",
+    "initial_programming": "SWD on each half; native USB-FS pins are not routed and no USB firmware updater is implemented"
+  },
+  "split_connection": {
+    "left_connector": "J501",
+    "right_connector": "J551",
+    "signals": "RS-485 plus switched power, not PC USB data",
+    "power_gate": "Right half supply remains blocked until the configured left USB/FUSB source policy permits it"
+  },
+  "en_n_electrical_correction": {
+    "source": "https://www.onsemi.com/download/data-sheet/pdf/fusb303b-d.pdf",
+    "source_revision": "FUSB303B/D September 2024 Rev. 3",
+    "absolute_maximum_rating": {
+      "table": 4,
+      "page": 7,
+      "symbol": "VIO",
+      "includes": "EN_N",
+      "min_v": -0.5,
+      "max_v": 6.0
+    },
+    "earlier_datasheet": {
+      "source": "https://datasheet.lcsc.com/datasheet/pdf/2646dd97327b29487d4e7d734663d6b6.pdf?productCode=C895444",
+      "source_revision": "FUSB303B/D April 2022 Rev. 2",
+      "local_path": "output/rev-c85-six-layer/review/fusb303b-lcsc.pdf",
+      "sha256": "82be508e65afb60c275f6d11110ce54d43616aeba1b92ac243cb2bb67f45803f",
+      "table": 4,
+      "page": 7,
+      "separate_EN_N_max_v": 2.0
+    },
+    "internal_pullup": {
+      "table": 6,
+      "page": 8,
+      "typical_ohms": 6000000,
+      "rail": "VDD"
+    },
+    "corrects_attribution": "The historical 2026-10-21 review incorrectly attributed the 2.0 V EN_N limit to Rev. 3. That separate limit exists in the archived Rev. 2; current Rev. 3 lists EN_N under VIO at 6.0 V.",
+    "revision_difference_cause": "Unknown from these documents; no assertion of silicon changes or applicability to a particular received lot.",
+    "assessment": "3.3 V is below the current Rev. 3 EN_N absolute maximum, so a universal 3.3 V overvoltage claim is unsupported. Preserve the reviewed R609 DNP assembly and selected open-drain policy conservatively; physical EN_N voltage and startup/disable timing remain untested."
+  }
+}

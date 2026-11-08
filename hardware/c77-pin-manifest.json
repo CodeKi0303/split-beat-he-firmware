@@ -1,0 +1,2996 @@
+{
+  "schema_version": 1,
+  "board_id": "c77-factory-swd-h723vg",
+  "hardware_validation": "UNTESTED_ON_PHYSICAL_C77_PCB",
+  "source_files": {
+    "output/rev-c77-all-m3-wheel/assembly-factory-swd/pcb/split-hall-c77-FACTORY-SWD-REVIEW.kicad_pcb": "38a013f400a93e966fa9c3a1847075b15c44fa3e1a44daf22d8675433d2964e7",
+    "design/rev-c15-h723vg-electrical/circuit.json": "8136a269800f18d343a730b41d7aeb87f30a3443cbf3bcd5e2d2e67fed3b92e5"
+  },
+  "mcu": {
+    "part": "STM32H723VGT6",
+    "package": "LQFP100",
+    "flash_kib": 1024,
+    "supply_mode": "internal LDO",
+    "hse_hz": 25000000,
+    "hse_mode": "bypass",
+    "hse_oe_gpio": "PD4",
+    "hse_input_gpio": "PH0"
+  },
+  "input_counts": {
+    "per_half": {
+      "hall_keys": 7,
+      "mx_keys": 2,
+      "knob_push": 1,
+      "quadrature_encoders": 2
+    },
+    "total": {
+      "hall_keys": 14,
+      "mx_keys": 4,
+      "knob_push": 2,
+      "quadrature_encoders": 4,
+      "binary_bindable_inputs": 20
+    }
+  },
+  "pin_comparison": {
+    "connected_mcu_pads_checked": 103,
+    "mismatches": [],
+    "result": "PASS_NETS_MATCH_PINNED_C77"
+  },
+  "halves": {
+    "left": {
+      "role": "usb-master",
+      "mcu_ref": "U210",
+      "mcu_pins": [
+        {
+          "package_pin": "1",
+          "signal_name": "PE2",
+          "native_net": "L_L_HALL_EN_N",
+          "connected": true
+        },
+        {
+          "package_pin": "2",
+          "signal_name": "PE3",
+          "native_net": "L_L_LINK_RE_N",
+          "connected": true
+        },
+        {
+          "package_pin": "3",
+          "signal_name": "PE4",
+          "native_net": "L_L_KNOB_A_GPIO",
+          "connected": true
+        },
+        {
+          "package_pin": "4",
+          "signal_name": "PE5",
+          "native_net": "L_L_KNOB_B_GPIO",
+          "connected": true
+        },
+        {
+          "package_pin": "5",
+          "signal_name": "PE6",
+          "native_net": "L_L_KNOB_SW_GPIO",
+          "connected": true
+        },
+        {
+          "package_pin": "6",
+          "signal_name": "VBAT",
+          "native_net": "L_L_3V3",
+          "connected": true
+        },
+        {
+          "package_pin": "7",
+          "signal_name": "PC13",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "8",
+          "signal_name": "PC14",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "9",
+          "signal_name": "PC15",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "10",
+          "signal_name": "VSS",
+          "native_net": "L_GND",
+          "connected": true
+        },
+        {
+          "package_pin": "11",
+          "signal_name": "VDD",
+          "native_net": "L_L_3V3",
+          "connected": true
+        },
+        {
+          "package_pin": "12",
+          "signal_name": "PH0",
+          "native_net": "L_L_HSE25",
+          "connected": true
+        },
+        {
+          "package_pin": "13",
+          "signal_name": "PH1",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "14",
+          "signal_name": "NRST",
+          "native_net": "L_L_NRST",
+          "connected": true
+        },
+        {
+          "package_pin": "15",
+          "signal_name": "PC0",
+          "native_net": "L_ULPI_STP",
+          "connected": true
+        },
+        {
+          "package_pin": "16",
+          "signal_name": "PC1",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "17",
+          "signal_name": "PC2_C",
+          "native_net": "L_ULPI_DIR",
+          "connected": true
+        },
+        {
+          "package_pin": "18",
+          "signal_name": "PC3_C",
+          "native_net": "L_ULPI_NXT",
+          "connected": true
+        },
+        {
+          "package_pin": "19",
+          "signal_name": "VSSA",
+          "native_net": "L_GND",
+          "connected": true
+        },
+        {
+          "package_pin": "20",
+          "signal_name": "VREF+",
+          "native_net": "L_L_A3V3",
+          "connected": true
+        },
+        {
+          "package_pin": "21",
+          "signal_name": "VDDA",
+          "native_net": "L_L_A3V3",
+          "connected": true
+        },
+        {
+          "package_pin": "22",
+          "signal_name": "PA0",
+          "native_net": "L_L_ADC1",
+          "connected": true
+        },
+        {
+          "package_pin": "23",
+          "signal_name": "PA1",
+          "native_net": "L_L_ADC2",
+          "connected": true
+        },
+        {
+          "package_pin": "24",
+          "signal_name": "PA2",
+          "native_net": "L_L_ADC3",
+          "connected": true
+        },
+        {
+          "package_pin": "25",
+          "signal_name": "PA3",
+          "native_net": "L_ULPI_D0",
+          "connected": true
+        },
+        {
+          "package_pin": "26",
+          "signal_name": "VSS",
+          "native_net": "L_GND",
+          "connected": true
+        },
+        {
+          "package_pin": "27",
+          "signal_name": "VDD",
+          "native_net": "L_L_3V3",
+          "connected": true
+        },
+        {
+          "package_pin": "28",
+          "signal_name": "PA4",
+          "native_net": "L_L_ADC6",
+          "connected": true
+        },
+        {
+          "package_pin": "29",
+          "signal_name": "PA5",
+          "native_net": "L_ULPI_CLK",
+          "connected": true
+        },
+        {
+          "package_pin": "30",
+          "signal_name": "PA6",
+          "native_net": "L_L_ADC7",
+          "connected": true
+        },
+        {
+          "package_pin": "31",
+          "signal_name": "PA7",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "32",
+          "signal_name": "PC4",
+          "native_net": "L_L_ADC4",
+          "connected": true
+        },
+        {
+          "package_pin": "33",
+          "signal_name": "PC5",
+          "native_net": "L_L_ADC5",
+          "connected": true
+        },
+        {
+          "package_pin": "34",
+          "signal_name": "PB0",
+          "native_net": "L_ULPI_D1",
+          "connected": true
+        },
+        {
+          "package_pin": "35",
+          "signal_name": "PB1",
+          "native_net": "L_ULPI_D2",
+          "connected": true
+        },
+        {
+          "package_pin": "36",
+          "signal_name": "PB2",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "37",
+          "signal_name": "PE7",
+          "native_net": "L_CC_INT_N",
+          "connected": true
+        },
+        {
+          "package_pin": "38",
+          "signal_name": "PE8",
+          "native_net": "L_CC_ID_N",
+          "connected": true
+        },
+        {
+          "package_pin": "39",
+          "signal_name": "PE9",
+          "native_net": "L_PWR_FAULT_N",
+          "connected": true
+        },
+        {
+          "package_pin": "40",
+          "signal_name": "PE10",
+          "native_net": "L_L_KEY1_N",
+          "connected": true
+        },
+        {
+          "package_pin": "41",
+          "signal_name": "PE11",
+          "native_net": "L_L_ROLL_A_GPIO",
+          "connected": true
+        },
+        {
+          "package_pin": "42",
+          "signal_name": "PE12",
+          "native_net": "L_L_ROLL_B_GPIO",
+          "connected": true
+        },
+        {
+          "package_pin": "43",
+          "signal_name": "PE13",
+          "native_net": "L_L_KEY4_N",
+          "connected": true
+        },
+        {
+          "package_pin": "44",
+          "signal_name": "PE14",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "45",
+          "signal_name": "PE15",
+          "native_net": "L_CC_EN_N",
+          "connected": true
+        },
+        {
+          "package_pin": "46",
+          "signal_name": "PB10",
+          "native_net": "L_ULPI_D3",
+          "connected": true
+        },
+        {
+          "package_pin": "47",
+          "signal_name": "PB11",
+          "native_net": "L_ULPI_D4",
+          "connected": true
+        },
+        {
+          "package_pin": "48",
+          "signal_name": "VCAP1",
+          "native_net": "L_L_VCAP1",
+          "connected": true
+        },
+        {
+          "package_pin": "49",
+          "signal_name": "VSS",
+          "native_net": "L_GND",
+          "connected": true
+        },
+        {
+          "package_pin": "50",
+          "signal_name": "VDD",
+          "native_net": "L_L_3V3",
+          "connected": true
+        },
+        {
+          "package_pin": "51",
+          "signal_name": "PB12",
+          "native_net": "L_ULPI_D5",
+          "connected": true
+        },
+        {
+          "package_pin": "52",
+          "signal_name": "PB13",
+          "native_net": "L_ULPI_D6",
+          "connected": true
+        },
+        {
+          "package_pin": "53",
+          "signal_name": "PB14",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "54",
+          "signal_name": "PB15",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "55",
+          "signal_name": "PD8",
+          "native_net": "L_L_TX",
+          "connected": true
+        },
+        {
+          "package_pin": "56",
+          "signal_name": "PD9",
+          "native_net": "L_L_RX",
+          "connected": true
+        },
+        {
+          "package_pin": "57",
+          "signal_name": "PD10",
+          "native_net": "L_PHY_RESET",
+          "connected": true
+        },
+        {
+          "package_pin": "58",
+          "signal_name": "PD11",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "59",
+          "signal_name": "PD12",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "60",
+          "signal_name": "PD13",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "61",
+          "signal_name": "PD14",
+          "native_net": "L_L_DE",
+          "connected": true
+        },
+        {
+          "package_pin": "62",
+          "signal_name": "PD15",
+          "native_net": "L_PWR_BLOCK",
+          "connected": true
+        },
+        {
+          "package_pin": "63",
+          "signal_name": "PC6",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "64",
+          "signal_name": "PC7",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "65",
+          "signal_name": "PC8",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "66",
+          "signal_name": "PC9",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "67",
+          "signal_name": "PA8",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "68",
+          "signal_name": "PA9",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "69",
+          "signal_name": "PA10",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "70",
+          "signal_name": "PA11",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "71",
+          "signal_name": "PA12",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "72",
+          "signal_name": "PA13",
+          "native_net": "L_L_SWDIO",
+          "connected": true
+        },
+        {
+          "package_pin": "73",
+          "signal_name": "VCAP2",
+          "native_net": "L_L_VCAP2",
+          "connected": true
+        },
+        {
+          "package_pin": "74",
+          "signal_name": "VSS",
+          "native_net": "L_GND",
+          "connected": true
+        },
+        {
+          "package_pin": "75",
+          "signal_name": "VDD",
+          "native_net": "L_L_3V3",
+          "connected": true
+        },
+        {
+          "package_pin": "76",
+          "signal_name": "PA14",
+          "native_net": "L_L_SWCLK",
+          "connected": true
+        },
+        {
+          "package_pin": "77",
+          "signal_name": "PA15",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "78",
+          "signal_name": "PC10",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "79",
+          "signal_name": "PC11",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "80",
+          "signal_name": "PC12",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "81",
+          "signal_name": "PD0",
+          "native_net": "L_PHY_XO_EN",
+          "connected": true
+        },
+        {
+          "package_pin": "82",
+          "signal_name": "PD1",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "83",
+          "signal_name": "PD2",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "84",
+          "signal_name": "PD3",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "85",
+          "signal_name": "PD4",
+          "native_net": "L_L_HSE_EN",
+          "connected": true
+        },
+        {
+          "package_pin": "86",
+          "signal_name": "PD5",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "87",
+          "signal_name": "PD6",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "88",
+          "signal_name": "PD7",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "89",
+          "signal_name": "PB3",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "90",
+          "signal_name": "PB4",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "91",
+          "signal_name": "PB5",
+          "native_net": "L_ULPI_D7",
+          "connected": true
+        },
+        {
+          "package_pin": "92",
+          "signal_name": "PB6",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "93",
+          "signal_name": "PB7",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "94",
+          "signal_name": "BOOT0",
+          "native_net": "L_L_BOOT0",
+          "connected": true
+        },
+        {
+          "package_pin": "95",
+          "signal_name": "PB8",
+          "native_net": "L_CC_SCL",
+          "connected": true
+        },
+        {
+          "package_pin": "96",
+          "signal_name": "PB9",
+          "native_net": "L_CC_SDA",
+          "connected": true
+        },
+        {
+          "package_pin": "97",
+          "signal_name": "PE0",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "98",
+          "signal_name": "PE1",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "99",
+          "signal_name": "VSS",
+          "native_net": "L_GND",
+          "connected": true
+        },
+        {
+          "package_pin": "100",
+          "signal_name": "VDD",
+          "native_net": "L_L_3V3",
+          "connected": true
+        }
+      ],
+      "hall_power": {
+        "enable_n": "PE2",
+        "default": "off",
+        "active_level": 0
+      },
+      "hall": [
+        {
+          "local_index": 0,
+          "label": "CAPS",
+          "gpio": "PA0",
+          "adc": "ADC1",
+          "channel": 16,
+          "sensor": {
+            "ref": "U1001",
+            "value": "SS39ET",
+            "footprint": "SOT-23",
+            "board_position_mm": [
+              51.051105,
+              95.5619
+            ],
+            "rotation_degrees": 0.0,
+            "layer": "B.Cu",
+            "pads": [
+              {
+                "number": "1",
+                "net": "L_L_HALL3V3"
+              },
+              {
+                "number": "2",
+                "net": "L_L_HALL1"
+              },
+              {
+                "number": "3",
+                "net": "L_GND"
+              }
+            ]
+          },
+          "input_network": "SS39ET output -> 1k series -> ADC; sensor VCC has 100nF decoupling",
+          "net": "L_L_ADC1"
+        },
+        {
+          "local_index": 1,
+          "label": "Q",
+          "gpio": "PA1",
+          "adc": "ADC1",
+          "channel": 17,
+          "sensor": {
+            "ref": "U1002",
+            "value": "SS39ET",
+            "footprint": "SOT-23",
+            "board_position_mm": [
+              76.5,
+              76.55
+            ],
+            "rotation_degrees": 0.0,
+            "layer": "B.Cu",
+            "pads": [
+              {
+                "number": "1",
+                "net": "L_L_HALL3V3"
+              },
+              {
+                "number": "2",
+                "net": "L_L_HALL2"
+              },
+              {
+                "number": "3",
+                "net": "L_GND"
+              }
+            ]
+          },
+          "input_network": "SS39ET output -> 1k series -> ADC; sensor VCC has 100nF decoupling",
+          "net": "L_L_ADC2"
+        },
+        {
+          "local_index": 2,
+          "label": "W",
+          "gpio": "PA2",
+          "adc": "ADC1",
+          "channel": 14,
+          "sensor": {
+            "ref": "U1003",
+            "value": "SS39ET",
+            "footprint": "SOT-23",
+            "board_position_mm": [
+              96.578411,
+              76.189908
+            ],
+            "rotation_degrees": 12.0,
+            "layer": "B.Cu",
+            "pads": [
+              {
+                "number": "1",
+                "net": "L_L_HALL3V3"
+              },
+              {
+                "number": "2",
+                "net": "L_L_HALL3"
+              },
+              {
+                "number": "3",
+                "net": "L_GND"
+              }
+            ]
+          },
+          "input_network": "SS39ET output -> 1k series -> ADC; sensor VCC has 100nF decoupling",
+          "net": "L_L_ADC3"
+        },
+        {
+          "local_index": 3,
+          "label": "E",
+          "gpio": "PC4",
+          "adc": "ADC1",
+          "channel": 4,
+          "sensor": {
+            "ref": "U1004",
+            "value": "SS39ET",
+            "footprint": "SOT-23",
+            "board_position_mm": [
+              115.212122,
+              80.150626
+            ],
+            "rotation_degrees": 12.0,
+            "layer": "B.Cu",
+            "pads": [
+              {
+                "number": "1",
+                "net": "L_L_HALL3V3"
+              },
+              {
+                "number": "2",
+                "net": "L_L_HALL4"
+              },
+              {
+                "number": "3",
+                "net": "L_GND"
+              }
+            ]
+          },
+          "input_network": "SS39ET output -> 1k series -> ADC; sensor VCC has 100nF decoupling",
+          "net": "L_L_ADC4"
+        },
+        {
+          "local_index": 4,
+          "label": "R",
+          "gpio": "PC5",
+          "adc": "ADC1",
+          "channel": 8,
+          "sensor": {
+            "ref": "U1005",
+            "value": "SS39ET",
+            "footprint": "SOT-23",
+            "board_position_mm": [
+              133.845834,
+              84.111344
+            ],
+            "rotation_degrees": 12.0,
+            "layer": "B.Cu",
+            "pads": [
+              {
+                "number": "1",
+                "net": "L_L_HALL3V3"
+              },
+              {
+                "number": "2",
+                "net": "L_L_HALL5"
+              },
+              {
+                "number": "3",
+                "net": "L_GND"
+              }
+            ]
+          },
+          "input_network": "SS39ET output -> 1k series -> ADC; sensor VCC has 100nF decoupling",
+          "net": "L_L_ADC5"
+        },
+        {
+          "local_index": 5,
+          "label": "SHIFT",
+          "gpio": "PA4",
+          "adc": "ADC1",
+          "channel": 18,
+          "sensor": {
+            "ref": "U1006",
+            "value": "SS39ET",
+            "footprint": "SOT-23",
+            "board_position_mm": [
+              51.647369,
+              114.58523
+            ],
+            "rotation_degrees": 0.0,
+            "layer": "B.Cu",
+            "pads": [
+              {
+                "number": "1",
+                "net": "L_L_HALL3V3"
+              },
+              {
+                "number": "2",
+                "net": "L_L_HALL6"
+              },
+              {
+                "number": "3",
+                "net": "L_GND"
+              }
+            ]
+          },
+          "input_network": "SS39ET output -> 1k series -> ADC; sensor VCC has 100nF decoupling",
+          "net": "L_L_ADC6"
+        },
+        {
+          "local_index": 6,
+          "label": "SPACE",
+          "gpio": "PA6",
+          "adc": "ADC1",
+          "channel": 3,
+          "sensor": {
+            "ref": "U1007",
+            "value": "SS39ET",
+            "footprint": "SOT-23",
+            "board_position_mm": [
+              133.662576,
+              142.146283
+            ],
+            "rotation_degrees": 12.0,
+            "layer": "B.Cu",
+            "pads": [
+              {
+                "number": "1",
+                "net": "L_L_HALL3V3"
+              },
+              {
+                "number": "2",
+                "net": "L_L_HALL7"
+              },
+              {
+                "number": "3",
+                "net": "L_GND"
+              }
+            ]
+          },
+          "input_network": "SS39ET output -> 1k series -> ADC; sensor VCC has 100nF decoupling",
+          "net": "L_L_ADC7"
+        }
+      ],
+      "mx": [
+        {
+          "label": "1",
+          "gpio": "PE10",
+          "switch_ref": "SW1201",
+          "active_level": 0
+        },
+        {
+          "label": "4",
+          "gpio": "PE13",
+          "switch_ref": "SW1204",
+          "active_level": 0
+        }
+      ],
+      "roller": {
+        "part": "TTC Gold H10",
+        "a": "PE11",
+        "b": "PE12",
+        "common": "GND",
+        "electrical_interface": "dry contacts, external 10k pullups + 1k series",
+        "has_click": false,
+        "connector": {
+          "ref": "L_J1202",
+          "value": "TTC H10 DIRECT THT + optional wire lands",
+          "footprint": "TTC_H10_Direct_left",
+          "board_position_mm": [
+            99.281895,
+            45.873784
+          ],
+          "rotation_degrees": 0.0,
+          "layer": "B.Cu",
+          "pads": [
+            {
+              "number": "1",
+              "net": "L_GND"
+            },
+            {
+              "number": "1",
+              "net": "L_GND"
+            },
+            {
+              "number": "1",
+              "net": "L_GND"
+            },
+            {
+              "number": "2",
+              "net": "L_L_ROLL_A"
+            },
+            {
+              "number": "2",
+              "net": "L_L_ROLL_A"
+            },
+            {
+              "number": "3",
+              "net": "L_L_ROLL_B"
+            },
+            {
+              "number": "MP1",
+              "net": ""
+            },
+            {
+              "number": "MP2",
+              "net": ""
+            }
+          ]
+        }
+      },
+      "knob": {
+        "part": "PEC11R-4215F-S0024",
+        "a": "PE4",
+        "b": "PE5",
+        "push": "PE6",
+        "push_active_level": 0,
+        "pulses_per_revolution": 24,
+        "detents_per_revolution": 24,
+        "quadrature_transitions_per_revolution": 96,
+        "component": {
+          "ref": "ENC1401",
+          "value": "PEC11R-4215F-S0024",
+          "footprint": "Bourns_PEC11R_4215F_S0024_Centered",
+          "board_position_mm": [
+            43.0,
+            47.5
+          ],
+          "rotation_degrees": 0.0,
+          "layer": "F.Cu",
+          "pads": [
+            {
+              "number": "A",
+              "net": "L_L_KNOB_A"
+            },
+            {
+              "number": "B",
+              "net": "L_L_KNOB_B"
+            },
+            {
+              "number": "C",
+              "net": "L_GND"
+            },
+            {
+              "number": "MP1",
+              "net": "L_GND"
+            },
+            {
+              "number": "MP2",
+              "net": "L_GND"
+            },
+            {
+              "number": "S1",
+              "net": "L_L_KNOB_SW"
+            },
+            {
+              "number": "S2",
+              "net": "L_GND"
+            }
+          ]
+        }
+      },
+      "split": {
+        "uart": "USART3",
+        "af": 7,
+        "tx": "PD8",
+        "rx": "PD9",
+        "de": "PD14",
+        "re_n": "PE3",
+        "transceiver": "THVD1450DR",
+        "default": "DE=0, RE_N=1",
+        "tx_mode": "DE=1, RE_N=1",
+        "rx_mode": "DE=0, RE_N=0",
+        "turnaround_note": "Wait USART TC (shift register empty), not merely TX DMA complete, before lowering DE"
+      },
+      "swd": {
+        "ref": "L_J74_SWD",
+        "value": "PZ254R-11-05P",
+        "footprint": "PinHeader_1x05_P2.54mm_Horizontal_C74_D1p1",
+        "board_position_mm": [
+          91.92,
+          147.55
+        ],
+        "rotation_degrees": -90.0,
+        "layer": "B.Cu",
+        "pads": [
+          {
+            "number": "1",
+            "net": "L_L_3V3"
+          },
+          {
+            "number": "2",
+            "net": "L_GND"
+          },
+          {
+            "number": "3",
+            "net": "L_L_SWDIO"
+          },
+          {
+            "number": "4",
+            "net": "L_L_SWCLK"
+          },
+          {
+            "number": "5",
+            "net": "L_L_NRST"
+          }
+        ]
+      },
+      "signals": {
+        "PE2": {
+          "package_pin": "1",
+          "signal_name": "PE2",
+          "native_net": "L_L_HALL_EN_N",
+          "connected": true
+        },
+        "PE3": {
+          "package_pin": "2",
+          "signal_name": "PE3",
+          "native_net": "L_L_LINK_RE_N",
+          "connected": true
+        },
+        "PE4": {
+          "package_pin": "3",
+          "signal_name": "PE4",
+          "native_net": "L_L_KNOB_A_GPIO",
+          "connected": true
+        },
+        "PE5": {
+          "package_pin": "4",
+          "signal_name": "PE5",
+          "native_net": "L_L_KNOB_B_GPIO",
+          "connected": true
+        },
+        "PE6": {
+          "package_pin": "5",
+          "signal_name": "PE6",
+          "native_net": "L_L_KNOB_SW_GPIO",
+          "connected": true
+        },
+        "PH0": {
+          "package_pin": "12",
+          "signal_name": "PH0",
+          "native_net": "L_L_HSE25",
+          "connected": true
+        },
+        "PC0": {
+          "package_pin": "15",
+          "signal_name": "PC0",
+          "native_net": "L_ULPI_STP",
+          "connected": true
+        },
+        "PC2_C": {
+          "package_pin": "17",
+          "signal_name": "PC2_C",
+          "native_net": "L_ULPI_DIR",
+          "connected": true
+        },
+        "PC3_C": {
+          "package_pin": "18",
+          "signal_name": "PC3_C",
+          "native_net": "L_ULPI_NXT",
+          "connected": true
+        },
+        "PA0": {
+          "package_pin": "22",
+          "signal_name": "PA0",
+          "native_net": "L_L_ADC1",
+          "connected": true
+        },
+        "PA1": {
+          "package_pin": "23",
+          "signal_name": "PA1",
+          "native_net": "L_L_ADC2",
+          "connected": true
+        },
+        "PA2": {
+          "package_pin": "24",
+          "signal_name": "PA2",
+          "native_net": "L_L_ADC3",
+          "connected": true
+        },
+        "PA3": {
+          "package_pin": "25",
+          "signal_name": "PA3",
+          "native_net": "L_ULPI_D0",
+          "connected": true
+        },
+        "PA4": {
+          "package_pin": "28",
+          "signal_name": "PA4",
+          "native_net": "L_L_ADC6",
+          "connected": true
+        },
+        "PA5": {
+          "package_pin": "29",
+          "signal_name": "PA5",
+          "native_net": "L_ULPI_CLK",
+          "connected": true
+        },
+        "PA6": {
+          "package_pin": "30",
+          "signal_name": "PA6",
+          "native_net": "L_L_ADC7",
+          "connected": true
+        },
+        "PC4": {
+          "package_pin": "32",
+          "signal_name": "PC4",
+          "native_net": "L_L_ADC4",
+          "connected": true
+        },
+        "PC5": {
+          "package_pin": "33",
+          "signal_name": "PC5",
+          "native_net": "L_L_ADC5",
+          "connected": true
+        },
+        "PB0": {
+          "package_pin": "34",
+          "signal_name": "PB0",
+          "native_net": "L_ULPI_D1",
+          "connected": true
+        },
+        "PB1": {
+          "package_pin": "35",
+          "signal_name": "PB1",
+          "native_net": "L_ULPI_D2",
+          "connected": true
+        },
+        "PE7": {
+          "package_pin": "37",
+          "signal_name": "PE7",
+          "native_net": "L_CC_INT_N",
+          "connected": true
+        },
+        "PE8": {
+          "package_pin": "38",
+          "signal_name": "PE8",
+          "native_net": "L_CC_ID_N",
+          "connected": true
+        },
+        "PE9": {
+          "package_pin": "39",
+          "signal_name": "PE9",
+          "native_net": "L_PWR_FAULT_N",
+          "connected": true
+        },
+        "PE10": {
+          "package_pin": "40",
+          "signal_name": "PE10",
+          "native_net": "L_L_KEY1_N",
+          "connected": true
+        },
+        "PE11": {
+          "package_pin": "41",
+          "signal_name": "PE11",
+          "native_net": "L_L_ROLL_A_GPIO",
+          "connected": true
+        },
+        "PE12": {
+          "package_pin": "42",
+          "signal_name": "PE12",
+          "native_net": "L_L_ROLL_B_GPIO",
+          "connected": true
+        },
+        "PE13": {
+          "package_pin": "43",
+          "signal_name": "PE13",
+          "native_net": "L_L_KEY4_N",
+          "connected": true
+        },
+        "PE15": {
+          "package_pin": "45",
+          "signal_name": "PE15",
+          "native_net": "L_CC_EN_N",
+          "connected": true
+        },
+        "PB10": {
+          "package_pin": "46",
+          "signal_name": "PB10",
+          "native_net": "L_ULPI_D3",
+          "connected": true
+        },
+        "PB11": {
+          "package_pin": "47",
+          "signal_name": "PB11",
+          "native_net": "L_ULPI_D4",
+          "connected": true
+        },
+        "PB12": {
+          "package_pin": "51",
+          "signal_name": "PB12",
+          "native_net": "L_ULPI_D5",
+          "connected": true
+        },
+        "PB13": {
+          "package_pin": "52",
+          "signal_name": "PB13",
+          "native_net": "L_ULPI_D6",
+          "connected": true
+        },
+        "PD8": {
+          "package_pin": "55",
+          "signal_name": "PD8",
+          "native_net": "L_L_TX",
+          "connected": true
+        },
+        "PD9": {
+          "package_pin": "56",
+          "signal_name": "PD9",
+          "native_net": "L_L_RX",
+          "connected": true
+        },
+        "PD10": {
+          "package_pin": "57",
+          "signal_name": "PD10",
+          "native_net": "L_PHY_RESET",
+          "connected": true
+        },
+        "PD14": {
+          "package_pin": "61",
+          "signal_name": "PD14",
+          "native_net": "L_L_DE",
+          "connected": true
+        },
+        "PD15": {
+          "package_pin": "62",
+          "signal_name": "PD15",
+          "native_net": "L_PWR_BLOCK",
+          "connected": true
+        },
+        "PA13": {
+          "package_pin": "72",
+          "signal_name": "PA13",
+          "native_net": "L_L_SWDIO",
+          "connected": true
+        },
+        "PA14": {
+          "package_pin": "76",
+          "signal_name": "PA14",
+          "native_net": "L_L_SWCLK",
+          "connected": true
+        },
+        "PD0": {
+          "package_pin": "81",
+          "signal_name": "PD0",
+          "native_net": "L_PHY_XO_EN",
+          "connected": true
+        },
+        "PD4": {
+          "package_pin": "85",
+          "signal_name": "PD4",
+          "native_net": "L_L_HSE_EN",
+          "connected": true
+        },
+        "PB5": {
+          "package_pin": "91",
+          "signal_name": "PB5",
+          "native_net": "L_ULPI_D7",
+          "connected": true
+        },
+        "PB8": {
+          "package_pin": "95",
+          "signal_name": "PB8",
+          "native_net": "L_CC_SCL",
+          "connected": true
+        },
+        "PB9": {
+          "package_pin": "96",
+          "signal_name": "PB9",
+          "native_net": "L_CC_SDA",
+          "connected": true
+        }
+      }
+    },
+    "right": {
+      "role": "split-acquisition",
+      "mcu_ref": "U310",
+      "mcu_pins": [
+        {
+          "package_pin": "1",
+          "signal_name": "PE2",
+          "native_net": "R_R_HALL_EN_N",
+          "connected": true
+        },
+        {
+          "package_pin": "2",
+          "signal_name": "PE3",
+          "native_net": "R_R_LINK_RE_N",
+          "connected": true
+        },
+        {
+          "package_pin": "3",
+          "signal_name": "PE4",
+          "native_net": "R_R_KNOB_A_GPIO",
+          "connected": true
+        },
+        {
+          "package_pin": "4",
+          "signal_name": "PE5",
+          "native_net": "R_R_KNOB_B_GPIO",
+          "connected": true
+        },
+        {
+          "package_pin": "5",
+          "signal_name": "PE6",
+          "native_net": "R_R_KNOB_SW_GPIO",
+          "connected": true
+        },
+        {
+          "package_pin": "6",
+          "signal_name": "VBAT",
+          "native_net": "R_R_3V3",
+          "connected": true
+        },
+        {
+          "package_pin": "7",
+          "signal_name": "PC13",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "8",
+          "signal_name": "PC14",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "9",
+          "signal_name": "PC15",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "10",
+          "signal_name": "VSS",
+          "native_net": "R_GND",
+          "connected": true
+        },
+        {
+          "package_pin": "11",
+          "signal_name": "VDD",
+          "native_net": "R_R_3V3",
+          "connected": true
+        },
+        {
+          "package_pin": "12",
+          "signal_name": "PH0",
+          "native_net": "R_R_HSE25",
+          "connected": true
+        },
+        {
+          "package_pin": "13",
+          "signal_name": "PH1",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "14",
+          "signal_name": "NRST",
+          "native_net": "R_R_NRST",
+          "connected": true
+        },
+        {
+          "package_pin": "15",
+          "signal_name": "PC0",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "16",
+          "signal_name": "PC1",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "17",
+          "signal_name": "PC2_C",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "18",
+          "signal_name": "PC3_C",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "19",
+          "signal_name": "VSSA",
+          "native_net": "R_GND",
+          "connected": true
+        },
+        {
+          "package_pin": "20",
+          "signal_name": "VREF+",
+          "native_net": "R_R_A3V3",
+          "connected": true
+        },
+        {
+          "package_pin": "21",
+          "signal_name": "VDDA",
+          "native_net": "R_R_A3V3",
+          "connected": true
+        },
+        {
+          "package_pin": "22",
+          "signal_name": "PA0",
+          "native_net": "R_R_ADC1",
+          "connected": true
+        },
+        {
+          "package_pin": "23",
+          "signal_name": "PA1",
+          "native_net": "R_R_ADC2",
+          "connected": true
+        },
+        {
+          "package_pin": "24",
+          "signal_name": "PA2",
+          "native_net": "R_R_ADC3",
+          "connected": true
+        },
+        {
+          "package_pin": "25",
+          "signal_name": "PA3",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "26",
+          "signal_name": "VSS",
+          "native_net": "R_GND",
+          "connected": true
+        },
+        {
+          "package_pin": "27",
+          "signal_name": "VDD",
+          "native_net": "R_R_3V3",
+          "connected": true
+        },
+        {
+          "package_pin": "28",
+          "signal_name": "PA4",
+          "native_net": "R_R_ADC6",
+          "connected": true
+        },
+        {
+          "package_pin": "29",
+          "signal_name": "PA5",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "30",
+          "signal_name": "PA6",
+          "native_net": "R_R_ADC7",
+          "connected": true
+        },
+        {
+          "package_pin": "31",
+          "signal_name": "PA7",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "32",
+          "signal_name": "PC4",
+          "native_net": "R_R_ADC4",
+          "connected": true
+        },
+        {
+          "package_pin": "33",
+          "signal_name": "PC5",
+          "native_net": "R_R_ADC5",
+          "connected": true
+        },
+        {
+          "package_pin": "34",
+          "signal_name": "PB0",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "35",
+          "signal_name": "PB1",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "36",
+          "signal_name": "PB2",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "37",
+          "signal_name": "PE7",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "38",
+          "signal_name": "PE8",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "39",
+          "signal_name": "PE9",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "40",
+          "signal_name": "PE10",
+          "native_net": "R_R_KEY1_N",
+          "connected": true
+        },
+        {
+          "package_pin": "41",
+          "signal_name": "PE11",
+          "native_net": "R_R_ROLL_A_GPIO",
+          "connected": true
+        },
+        {
+          "package_pin": "42",
+          "signal_name": "PE12",
+          "native_net": "R_R_ROLL_B_GPIO",
+          "connected": true
+        },
+        {
+          "package_pin": "43",
+          "signal_name": "PE13",
+          "native_net": "R_R_KEY4_N",
+          "connected": true
+        },
+        {
+          "package_pin": "44",
+          "signal_name": "PE14",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "45",
+          "signal_name": "PE15",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "46",
+          "signal_name": "PB10",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "47",
+          "signal_name": "PB11",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "48",
+          "signal_name": "VCAP1",
+          "native_net": "R_R_VCAP1",
+          "connected": true
+        },
+        {
+          "package_pin": "49",
+          "signal_name": "VSS",
+          "native_net": "R_GND",
+          "connected": true
+        },
+        {
+          "package_pin": "50",
+          "signal_name": "VDD",
+          "native_net": "R_R_3V3",
+          "connected": true
+        },
+        {
+          "package_pin": "51",
+          "signal_name": "PB12",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "52",
+          "signal_name": "PB13",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "53",
+          "signal_name": "PB14",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "54",
+          "signal_name": "PB15",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "55",
+          "signal_name": "PD8",
+          "native_net": "R_R_TX",
+          "connected": true
+        },
+        {
+          "package_pin": "56",
+          "signal_name": "PD9",
+          "native_net": "R_R_RX",
+          "connected": true
+        },
+        {
+          "package_pin": "57",
+          "signal_name": "PD10",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "58",
+          "signal_name": "PD11",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "59",
+          "signal_name": "PD12",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "60",
+          "signal_name": "PD13",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "61",
+          "signal_name": "PD14",
+          "native_net": "R_R_DE",
+          "connected": true
+        },
+        {
+          "package_pin": "62",
+          "signal_name": "PD15",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "63",
+          "signal_name": "PC6",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "64",
+          "signal_name": "PC7",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "65",
+          "signal_name": "PC8",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "66",
+          "signal_name": "PC9",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "67",
+          "signal_name": "PA8",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "68",
+          "signal_name": "PA9",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "69",
+          "signal_name": "PA10",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "70",
+          "signal_name": "PA11",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "71",
+          "signal_name": "PA12",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "72",
+          "signal_name": "PA13",
+          "native_net": "R_R_SWDIO",
+          "connected": true
+        },
+        {
+          "package_pin": "73",
+          "signal_name": "VCAP2",
+          "native_net": "R_R_VCAP2",
+          "connected": true
+        },
+        {
+          "package_pin": "74",
+          "signal_name": "VSS",
+          "native_net": "R_GND",
+          "connected": true
+        },
+        {
+          "package_pin": "75",
+          "signal_name": "VDD",
+          "native_net": "R_R_3V3",
+          "connected": true
+        },
+        {
+          "package_pin": "76",
+          "signal_name": "PA14",
+          "native_net": "R_R_SWCLK",
+          "connected": true
+        },
+        {
+          "package_pin": "77",
+          "signal_name": "PA15",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "78",
+          "signal_name": "PC10",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "79",
+          "signal_name": "PC11",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "80",
+          "signal_name": "PC12",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "81",
+          "signal_name": "PD0",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "82",
+          "signal_name": "PD1",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "83",
+          "signal_name": "PD2",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "84",
+          "signal_name": "PD3",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "85",
+          "signal_name": "PD4",
+          "native_net": "R_R_HSE_EN",
+          "connected": true
+        },
+        {
+          "package_pin": "86",
+          "signal_name": "PD5",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "87",
+          "signal_name": "PD6",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "88",
+          "signal_name": "PD7",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "89",
+          "signal_name": "PB3",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "90",
+          "signal_name": "PB4",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "91",
+          "signal_name": "PB5",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "92",
+          "signal_name": "PB6",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "93",
+          "signal_name": "PB7",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "94",
+          "signal_name": "BOOT0",
+          "native_net": "R_R_BOOT0",
+          "connected": true
+        },
+        {
+          "package_pin": "95",
+          "signal_name": "PB8",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "96",
+          "signal_name": "PB9",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "97",
+          "signal_name": "PE0",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "98",
+          "signal_name": "PE1",
+          "native_net": "",
+          "connected": false
+        },
+        {
+          "package_pin": "99",
+          "signal_name": "VSS",
+          "native_net": "R_GND",
+          "connected": true
+        },
+        {
+          "package_pin": "100",
+          "signal_name": "VDD",
+          "native_net": "R_R_3V3",
+          "connected": true
+        }
+      ],
+      "hall_power": {
+        "enable_n": "PE2",
+        "default": "off",
+        "active_level": 0
+      },
+      "hall": [
+        {
+          "local_index": 0,
+          "label": "CAPS",
+          "gpio": "PA0",
+          "adc": "ADC1",
+          "channel": 16,
+          "sensor": {
+            "ref": "U1101",
+            "value": "SS39ET",
+            "footprint": "SOT-23",
+            "board_position_mm": [
+              51.051105,
+              226.5381
+            ],
+            "rotation_degrees": 180.0,
+            "layer": "B.Cu",
+            "pads": [
+              {
+                "number": "1",
+                "net": "R_R_HALL3V3"
+              },
+              {
+                "number": "2",
+                "net": "R_R_HALL1"
+              },
+              {
+                "number": "3",
+                "net": "R_GND"
+              }
+            ]
+          },
+          "input_network": "SS39ET output -> 1k series -> ADC; sensor VCC has 100nF decoupling",
+          "net": "R_R_ADC1"
+        },
+        {
+          "local_index": 1,
+          "label": "Q",
+          "gpio": "PA1",
+          "adc": "ADC1",
+          "channel": 17,
+          "sensor": {
+            "ref": "U1102",
+            "value": "SS39ET",
+            "footprint": "SOT-23",
+            "board_position_mm": [
+              76.5,
+              245.55
+            ],
+            "rotation_degrees": 180.0,
+            "layer": "B.Cu",
+            "pads": [
+              {
+                "number": "1",
+                "net": "R_R_HALL3V3"
+              },
+              {
+                "number": "2",
+                "net": "R_R_HALL2"
+              },
+              {
+                "number": "3",
+                "net": "R_GND"
+              }
+            ]
+          },
+          "input_network": "SS39ET output -> 1k series -> ADC; sensor VCC has 100nF decoupling",
+          "net": "R_R_ADC2"
+        },
+        {
+          "local_index": 2,
+          "label": "W",
+          "gpio": "PA2",
+          "adc": "ADC1",
+          "channel": 14,
+          "sensor": {
+            "ref": "U1103",
+            "value": "SS39ET",
+            "footprint": "SOT-23",
+            "board_position_mm": [
+              96.578412,
+              245.910092
+            ],
+            "rotation_degrees": 168.0,
+            "layer": "B.Cu",
+            "pads": [
+              {
+                "number": "1",
+                "net": "R_R_HALL3V3"
+              },
+              {
+                "number": "2",
+                "net": "R_R_HALL3"
+              },
+              {
+                "number": "3",
+                "net": "R_GND"
+              }
+            ]
+          },
+          "input_network": "SS39ET output -> 1k series -> ADC; sensor VCC has 100nF decoupling",
+          "net": "R_R_ADC3"
+        },
+        {
+          "local_index": 3,
+          "label": "E",
+          "gpio": "PC4",
+          "adc": "ADC1",
+          "channel": 4,
+          "sensor": {
+            "ref": "U1104",
+            "value": "SS39ET",
+            "footprint": "SOT-23",
+            "board_position_mm": [
+              115.212123,
+              241.949374
+            ],
+            "rotation_degrees": 168.0,
+            "layer": "B.Cu",
+            "pads": [
+              {
+                "number": "1",
+                "net": "R_R_HALL3V3"
+              },
+              {
+                "number": "2",
+                "net": "R_R_HALL4"
+              },
+              {
+                "number": "3",
+                "net": "R_GND"
+              }
+            ]
+          },
+          "input_network": "SS39ET output -> 1k series -> ADC; sensor VCC has 100nF decoupling",
+          "net": "R_R_ADC4"
+        },
+        {
+          "local_index": 4,
+          "label": "R",
+          "gpio": "PC5",
+          "adc": "ADC1",
+          "channel": 8,
+          "sensor": {
+            "ref": "U1105",
+            "value": "SS39ET",
+            "footprint": "SOT-23",
+            "board_position_mm": [
+              133.845835,
+              237.988656
+            ],
+            "rotation_degrees": 168.0,
+            "layer": "B.Cu",
+            "pads": [
+              {
+                "number": "1",
+                "net": "R_R_HALL3V3"
+              },
+              {
+                "number": "2",
+                "net": "R_R_HALL5"
+              },
+              {
+                "number": "3",
+                "net": "R_GND"
+              }
+            ]
+          },
+          "input_network": "SS39ET output -> 1k series -> ADC; sensor VCC has 100nF decoupling",
+          "net": "R_R_ADC5"
+        },
+        {
+          "local_index": 5,
+          "label": "SHIFT",
+          "gpio": "PA4",
+          "adc": "ADC1",
+          "channel": 18,
+          "sensor": {
+            "ref": "U1106",
+            "value": "SS39ET",
+            "footprint": "SOT-23",
+            "board_position_mm": [
+              51.64737,
+              207.51477
+            ],
+            "rotation_degrees": 180.0,
+            "layer": "B.Cu",
+            "pads": [
+              {
+                "number": "1",
+                "net": "R_R_HALL3V3"
+              },
+              {
+                "number": "2",
+                "net": "R_R_HALL6"
+              },
+              {
+                "number": "3",
+                "net": "R_GND"
+              }
+            ]
+          },
+          "input_network": "SS39ET output -> 1k series -> ADC; sensor VCC has 100nF decoupling",
+          "net": "R_R_ADC6"
+        },
+        {
+          "local_index": 6,
+          "label": "SPACE",
+          "gpio": "PA6",
+          "adc": "ADC1",
+          "channel": 3,
+          "sensor": {
+            "ref": "U1107",
+            "value": "SS39ET",
+            "footprint": "SOT-23",
+            "board_position_mm": [
+              133.662577,
+              179.953717
+            ],
+            "rotation_degrees": 168.0,
+            "layer": "B.Cu",
+            "pads": [
+              {
+                "number": "1",
+                "net": "R_R_HALL3V3"
+              },
+              {
+                "number": "2",
+                "net": "R_R_HALL7"
+              },
+              {
+                "number": "3",
+                "net": "R_GND"
+              }
+            ]
+          },
+          "input_network": "SS39ET output -> 1k series -> ADC; sensor VCC has 100nF decoupling",
+          "net": "R_R_ADC7"
+        }
+      ],
+      "mx": [
+        {
+          "label": "1",
+          "gpio": "PE10",
+          "switch_ref": "SW1301",
+          "active_level": 0
+        },
+        {
+          "label": "4",
+          "gpio": "PE13",
+          "switch_ref": "SW1304",
+          "active_level": 0
+        }
+      ],
+      "roller": {
+        "part": "TTC Gold H10",
+        "a": "PE11",
+        "b": "PE12",
+        "common": "GND",
+        "electrical_interface": "dry contacts, external 10k pullups + 1k series",
+        "has_click": false,
+        "connector": {
+          "ref": "R_J1302",
+          "value": "TTC H10 DIRECT THT + optional wire lands",
+          "footprint": "TTC_H10_Direct_right",
+          "board_position_mm": [
+            99.281895,
+            276.226216
+          ],
+          "rotation_degrees": 180.0,
+          "layer": "B.Cu",
+          "pads": [
+            {
+              "number": "1",
+              "net": "R_GND"
+            },
+            {
+              "number": "1",
+              "net": "R_GND"
+            },
+            {
+              "number": "1",
+              "net": "R_GND"
+            },
+            {
+              "number": "2",
+              "net": "R_R_ROLL_A"
+            },
+            {
+              "number": "2",
+              "net": "R_R_ROLL_A"
+            },
+            {
+              "number": "3",
+              "net": "R_R_ROLL_B"
+            },
+            {
+              "number": "MP1",
+              "net": ""
+            },
+            {
+              "number": "MP2",
+              "net": ""
+            }
+          ]
+        }
+      },
+      "knob": {
+        "part": "PEC11R-4215F-S0024",
+        "a": "PE4",
+        "b": "PE5",
+        "push": "PE6",
+        "push_active_level": 0,
+        "pulses_per_revolution": 24,
+        "detents_per_revolution": 24,
+        "quadrature_transitions_per_revolution": 96,
+        "component": {
+          "ref": "ENC1501",
+          "value": "PEC11R-4215F-S0024",
+          "footprint": "Bourns_PEC11R_4215F_S0024_Centered",
+          "board_position_mm": [
+            43.0,
+            274.6
+          ],
+          "rotation_degrees": 180.0,
+          "layer": "F.Cu",
+          "pads": [
+            {
+              "number": "A",
+              "net": "R_R_KNOB_A"
+            },
+            {
+              "number": "B",
+              "net": "R_R_KNOB_B"
+            },
+            {
+              "number": "C",
+              "net": "R_GND"
+            },
+            {
+              "number": "MP1",
+              "net": "R_GND"
+            },
+            {
+              "number": "MP2",
+              "net": "R_GND"
+            },
+            {
+              "number": "S1",
+              "net": "R_R_KNOB_SW"
+            },
+            {
+              "number": "S2",
+              "net": "R_GND"
+            }
+          ]
+        }
+      },
+      "split": {
+        "uart": "USART3",
+        "af": 7,
+        "tx": "PD8",
+        "rx": "PD9",
+        "de": "PD14",
+        "re_n": "PE3",
+        "transceiver": "THVD1450DR",
+        "default": "DE=0, RE_N=1",
+        "tx_mode": "DE=1, RE_N=1",
+        "rx_mode": "DE=0, RE_N=0",
+        "turnaround_note": "Wait USART TC (shift register empty), not merely TX DMA complete, before lowering DE"
+      },
+      "swd": {
+        "ref": "R_J74_SWD",
+        "value": "PZ254R-11-05P",
+        "footprint": "PinHeader_1x05_P2.54mm_Horizontal_C74_D1p1",
+        "board_position_mm": [
+          102.08,
+          174.55
+        ],
+        "rotation_degrees": 90.0,
+        "layer": "B.Cu",
+        "pads": [
+          {
+            "number": "1",
+            "net": "R_R_3V3"
+          },
+          {
+            "number": "2",
+            "net": "R_GND"
+          },
+          {
+            "number": "3",
+            "net": "R_R_SWDIO"
+          },
+          {
+            "number": "4",
+            "net": "R_R_SWCLK"
+          },
+          {
+            "number": "5",
+            "net": "R_R_NRST"
+          }
+        ]
+      },
+      "signals": {
+        "PE2": {
+          "package_pin": "1",
+          "signal_name": "PE2",
+          "native_net": "R_R_HALL_EN_N",
+          "connected": true
+        },
+        "PE3": {
+          "package_pin": "2",
+          "signal_name": "PE3",
+          "native_net": "R_R_LINK_RE_N",
+          "connected": true
+        },
+        "PE4": {
+          "package_pin": "3",
+          "signal_name": "PE4",
+          "native_net": "R_R_KNOB_A_GPIO",
+          "connected": true
+        },
+        "PE5": {
+          "package_pin": "4",
+          "signal_name": "PE5",
+          "native_net": "R_R_KNOB_B_GPIO",
+          "connected": true
+        },
+        "PE6": {
+          "package_pin": "5",
+          "signal_name": "PE6",
+          "native_net": "R_R_KNOB_SW_GPIO",
+          "connected": true
+        },
+        "PH0": {
+          "package_pin": "12",
+          "signal_name": "PH0",
+          "native_net": "R_R_HSE25",
+          "connected": true
+        },
+        "PA0": {
+          "package_pin": "22",
+          "signal_name": "PA0",
+          "native_net": "R_R_ADC1",
+          "connected": true
+        },
+        "PA1": {
+          "package_pin": "23",
+          "signal_name": "PA1",
+          "native_net": "R_R_ADC2",
+          "connected": true
+        },
+        "PA2": {
+          "package_pin": "24",
+          "signal_name": "PA2",
+          "native_net": "R_R_ADC3",
+          "connected": true
+        },
+        "PA4": {
+          "package_pin": "28",
+          "signal_name": "PA4",
+          "native_net": "R_R_ADC6",
+          "connected": true
+        },
+        "PA6": {
+          "package_pin": "30",
+          "signal_name": "PA6",
+          "native_net": "R_R_ADC7",
+          "connected": true
+        },
+        "PC4": {
+          "package_pin": "32",
+          "signal_name": "PC4",
+          "native_net": "R_R_ADC4",
+          "connected": true
+        },
+        "PC5": {
+          "package_pin": "33",
+          "signal_name": "PC5",
+          "native_net": "R_R_ADC5",
+          "connected": true
+        },
+        "PE10": {
+          "package_pin": "40",
+          "signal_name": "PE10",
+          "native_net": "R_R_KEY1_N",
+          "connected": true
+        },
+        "PE11": {
+          "package_pin": "41",
+          "signal_name": "PE11",
+          "native_net": "R_R_ROLL_A_GPIO",
+          "connected": true
+        },
+        "PE12": {
+          "package_pin": "42",
+          "signal_name": "PE12",
+          "native_net": "R_R_ROLL_B_GPIO",
+          "connected": true
+        },
+        "PE13": {
+          "package_pin": "43",
+          "signal_name": "PE13",
+          "native_net": "R_R_KEY4_N",
+          "connected": true
+        },
+        "PD8": {
+          "package_pin": "55",
+          "signal_name": "PD8",
+          "native_net": "R_R_TX",
+          "connected": true
+        },
+        "PD9": {
+          "package_pin": "56",
+          "signal_name": "PD9",
+          "native_net": "R_R_RX",
+          "connected": true
+        },
+        "PD14": {
+          "package_pin": "61",
+          "signal_name": "PD14",
+          "native_net": "R_R_DE",
+          "connected": true
+        },
+        "PA13": {
+          "package_pin": "72",
+          "signal_name": "PA13",
+          "native_net": "R_R_SWDIO",
+          "connected": true
+        },
+        "PA14": {
+          "package_pin": "76",
+          "signal_name": "PA14",
+          "native_net": "R_R_SWCLK",
+          "connected": true
+        },
+        "PD4": {
+          "package_pin": "85",
+          "signal_name": "PD4",
+          "native_net": "R_R_HSE_EN",
+          "connected": true
+        }
+      }
+    }
+  },
+  "left_only": {
+    "usb_phy": {
+      "ref": "U401",
+      "part": "USB3300-EZK",
+      "mode": "ULPI external PHY",
+      "oscillator_hz": 24000000,
+      "oscillator_oe_gpio": "PD0",
+      "oscillator_startup_wait_us": 10000,
+      "reset_gpio": "PD10",
+      "reset_active_level": 1,
+      "ulpi_af": 10,
+      "pins": {
+        "CLK": "PA5",
+        "D0": "PA3",
+        "D1": "PB0",
+        "D2": "PB1",
+        "D3": "PB10",
+        "D4": "PB11",
+        "D5": "PB12",
+        "D6": "PB13",
+        "D7": "PB5",
+        "STP": "PC0",
+        "DIR": "PC2_C",
+        "NXT": "PC3_C"
+      },
+      "switch_note": "Connect PC2_C/PC3_C to their digital GPIO through SYSCFG analog switches; this package does not expose separate PC2/PC3 pins."
+    },
+    "split_usb_c_cc": {
+      "ref": "U604",
+      "part": "TUSB320LAIRWBR",
+      "bus": "I2C1",
+      "scl": "PB8",
+      "sda": "PB9",
+      "af": 4,
+      "address_7bit": 71,
+      "enable_n": "PE15",
+      "interrupt_n": "PE7",
+      "attach_id_n": "PE8",
+      "port_strap": "DFP/source",
+      "address_strap": "GND",
+      "purpose": "Split connector attach/power management, not the PC upstream connector"
+    },
+    "split_power": {
+      "switch": "TPS2552DBVR",
+      "block_gpio": "PD15",
+      "fault_n_gpio": "PE9",
+      "enable_n_equation": "CC_ID_N OR PWR_BLOCK",
+      "safe_boot": {
+        "PD15": 1,
+        "PE15": 1
+      },
+      "enable_policy": "Only after USB configured/power budget ready; fault and suspend must return to blocked state"
+    }
+  },
+  "absent_features": [
+    "LCD",
+    "external ADC multiplexer",
+    "RGB/status LEDs",
+    "right-half PC USB interface",
+    "MCU native FS data-pin connection"
+  ],
+  "physical_direction_note": "Right half is a mirrored mechanical assembly. Determine encoder sign on hardware; do not assume identical A/B polarity produces the same user-facing rotation.",
+  "keymap_note": "CAPS/Q/W/E/R/SHIFT/SPACE/1/4 are physical source labels on both halves, not an approved right-half HID keymap. Default usages are a software policy and remain remappable.",
+  "legacy_warning": "C8 11-key/four-MX descriptions and WeAct PA11/PA12 USB-FS builds do not describe C77.",
+  "peripheral_footprints": [
+    {
+      "ref": "U401",
+      "value": "USB3300-EZK",
+      "footprint": "QFN-32-1EP_5x5mm_P0.5mm_EP3.3x3.3mm",
+      "board_position_mm": [
+        87.0,
+        110.55
+      ],
+      "rotation_degrees": 0.0,
+      "layer": "B.Cu",
+      "pads": [
+        {
+          "number": "1",
+          "net": "L_GND"
+        },
+        {
+          "number": "2",
+          "net": "L_GND"
+        },
+        {
+          "number": "3",
+          "net": ""
+        },
+        {
+          "number": "4",
+          "net": "L_PHY_VBUS"
+        },
+        {
+          "number": "5",
+          "net": ""
+        },
+        {
+          "number": "6",
+          "net": "L_L_3V3"
+        },
+        {
+          "number": "7",
+          "net": "L_USB_HS_DP"
+        },
+        {
+          "number": "8",
+          "net": "L_USB_HS_DM"
+        },
+        {
+          "number": "9",
+          "net": "L_PHY_RESET"
+        },
+        {
+          "number": "10",
+          "net": ""
+        },
+        {
+          "number": "11",
+          "net": "L_ULPI_NXT"
+        },
+        {
+          "number": "12",
+          "net": "L_ULPI_DIR"
+        },
+        {
+          "number": "13",
+          "net": "L_ULPI_STP"
+        },
+        {
+          "number": "14",
+          "net": "L_ULPI_CLK"
+        },
+        {
+          "number": "15",
+          "net": "L_PHY_1V8D"
+        },
+        {
+          "number": "16",
+          "net": "L_L_3V3"
+        },
+        {
+          "number": "17",
+          "net": "L_ULPI_D7"
+        },
+        {
+          "number": "18",
+          "net": "L_ULPI_D6"
+        },
+        {
+          "number": "19",
+          "net": "L_ULPI_D5"
+        },
+        {
+          "number": "20",
+          "net": "L_ULPI_D4"
+        },
+        {
+          "number": "21",
+          "net": "L_ULPI_D3"
+        },
+        {
+          "number": "22",
+          "net": "L_ULPI_D2"
+        },
+        {
+          "number": "23",
+          "net": "L_ULPI_D1"
+        },
+        {
+          "number": "24",
+          "net": "L_ULPI_D0"
+        },
+        {
+          "number": "25",
+          "net": "L_L_3V3"
+        },
+        {
+          "number": "26",
+          "net": "L_PHY_1V8D"
+        },
+        {
+          "number": "27",
+          "net": ""
+        },
+        {
+          "number": "28",
+          "net": "L_PHY_XI"
+        },
+        {
+          "number": "29",
+          "net": "L_PHY_1V8A"
+        },
+        {
+          "number": "30",
+          "net": "L_L_3V3"
+        },
+        {
+          "number": "31",
+          "net": "L_L_3V3"
+        },
+        {
+          "number": "32",
+          "net": "L_PHY_RBIAS"
+        },
+        {
+          "number": "33",
+          "net": "L_GND"
+        }
+      ]
+    },
+    {
+      "ref": "X401",
+      "value": "ECS-3225MV-240-CN-TR",
+      "footprint": "ECS_3225MV_3.2x2.5mm",
+      "board_position_mm": [
+        87.0,
+        120.55
+      ],
+      "rotation_degrees": 0.0,
+      "layer": "B.Cu",
+      "pads": [
+        {
+          "number": "1",
+          "net": "L_PHY_XO_EN"
+        },
+        {
+          "number": "2",
+          "net": "L_GND"
+        },
+        {
+          "number": "3",
+          "net": "L_PHY_XI"
+        },
+        {
+          "number": "4",
+          "net": "L_L_3V3"
+        }
+      ]
+    },
+    {
+      "ref": "U501",
+      "value": "THVD1450DR",
+      "footprint": "SOIC-8_3.9x4.9mm_P1.27mm",
+      "board_position_mm": [
+        136.0,
+        101.55
+      ],
+      "rotation_degrees": 0.0,
+      "layer": "B.Cu",
+      "pads": [
+        {
+          "number": "1",
+          "net": "L_L_RX"
+        },
+        {
+          "number": "2",
+          "net": "L_L_LINK_RE_N"
+        },
+        {
+          "number": "3",
+          "net": "L_L_DE"
+        },
+        {
+          "number": "4",
+          "net": "L_L_TX"
+        },
+        {
+          "number": "5",
+          "net": "L_GND"
+        },
+        {
+          "number": "6",
+          "net": "L_LINK_A"
+        },
+        {
+          "number": "7",
+          "net": "L_LINK_B"
+        },
+        {
+          "number": "8",
+          "net": "L_L_3V3"
+        }
+      ]
+    },
+    {
+      "ref": "U551",
+      "value": "THVD1450DR",
+      "footprint": "SOIC-8_3.9x4.9mm_P1.27mm",
+      "board_position_mm": [
+        138.0,
+        219.55
+      ],
+      "rotation_degrees": 180.0,
+      "layer": "B.Cu",
+      "pads": [
+        {
+          "number": "1",
+          "net": "R_R_RX"
+        },
+        {
+          "number": "2",
+          "net": "R_R_LINK_RE_N"
+        },
+        {
+          "number": "3",
+          "net": "R_R_DE"
+        },
+        {
+          "number": "4",
+          "net": "R_R_TX"
+        },
+        {
+          "number": "5",
+          "net": "R_GND"
+        },
+        {
+          "number": "6",
+          "net": "R_LINK_A"
+        },
+        {
+          "number": "7",
+          "net": "R_LINK_B"
+        },
+        {
+          "number": "8",
+          "net": "R_R_3V3"
+        }
+      ]
+    },
+    {
+      "ref": "U602",
+      "value": "TPS2552DBVR",
+      "footprint": "SOT-23-6",
+      "board_position_mm": [
+        126.0,
+        106.55
+      ],
+      "rotation_degrees": 0.0,
+      "layer": "B.Cu",
+      "pads": [
+        {
+          "number": "1",
+          "net": "L_L_5V"
+        },
+        {
+          "number": "2",
+          "net": "L_GND"
+        },
+        {
+          "number": "3",
+          "net": "L_PWR_EN_N"
+        },
+        {
+          "number": "4",
+          "net": "L_PWR_FAULT_N"
+        },
+        {
+          "number": "5",
+          "net": "L_R_ILIM"
+        },
+        {
+          "number": "6",
+          "net": "L_SW_5V"
+        }
+      ]
+    },
+    {
+      "ref": "U604",
+      "value": "TUSB320LAIRWBR",
+      "footprint": "Texas_X2QFN-12_1.6x1.6mm_P0.4mm",
+      "board_position_mm": [
+        142.0,
+        111.55
+      ],
+      "rotation_degrees": 0.0,
+      "layer": "B.Cu",
+      "pads": [
+        {
+          "number": "1",
+          "net": "L_L_CC1"
+        },
+        {
+          "number": "2",
+          "net": "L_L_CC2"
+        },
+        {
+          "number": "3",
+          "net": "L_L_3V3"
+        },
+        {
+          "number": "4",
+          "net": "L_CC_VBUS_DET"
+        },
+        {
+          "number": "5",
+          "net": "L_GND"
+        },
+        {
+          "number": "6",
+          "net": "L_CC_INT_N"
+        },
+        {
+          "number": "7",
+          "net": "L_CC_SDA"
+        },
+        {
+          "number": "8",
+          "net": "L_CC_SCL"
+        },
+        {
+          "number": "9",
+          "net": "L_CC_ID_N"
+        },
+        {
+          "number": "10",
+          "net": "L_GND"
+        },
+        {
+          "number": "11",
+          "net": "L_CC_EN_N"
+        },
+        {
+          "number": "12",
+          "net": "L_L_3V3"
+        }
+      ]
+    },
+    {
+      "ref": "U605",
+      "value": "SN74LVC1G32DBVR",
+      "footprint": "SOT-23-5",
+      "board_position_mm": [
+        137.0,
+        111.55
+      ],
+      "rotation_degrees": 0.0,
+      "layer": "B.Cu",
+      "pads": [
+        {
+          "number": "1",
+          "net": "L_CC_ID_N"
+        },
+        {
+          "number": "2",
+          "net": "L_PWR_BLOCK"
+        },
+        {
+          "number": "3",
+          "net": "L_GND"
+        },
+        {
+          "number": "4",
+          "net": "L_PWR_EN_N"
+        },
+        {
+          "number": "5",
+          "net": "L_L_3V3"
+        }
+      ]
+    },
+    {
+      "ref": "X210",
+      "value": "ECS-3225MV-250-CN-TR",
+      "footprint": "ECS_3225MV_3.2x2.5mm",
+      "board_position_mm": [
+        116.0,
+        111.55
+      ],
+      "rotation_degrees": 0.0,
+      "layer": "B.Cu",
+      "pads": [
+        {
+          "number": "1",
+          "net": "L_L_HSE_EN"
+        },
+        {
+          "number": "2",
+          "net": "L_GND"
+        },
+        {
+          "number": "3",
+          "net": "L_L_HSE25"
+        },
+        {
+          "number": "4",
+          "net": "L_L_3V3"
+        }
+      ]
+    },
+    {
+      "ref": "X310",
+      "value": "ECS-3225MV-250-CN-TR",
+      "footprint": "ECS_3225MV_3.2x2.5mm",
+      "board_position_mm": [
+        89.0,
+        210.55
+      ],
+      "rotation_degrees": 180.0,
+      "layer": "B.Cu",
+      "pads": [
+        {
+          "number": "1",
+          "net": "R_R_HSE_EN"
+        },
+        {
+          "number": "2",
+          "net": "R_GND"
+        },
+        {
+          "number": "3",
+          "net": "R_R_HSE25"
+        },
+        {
+          "number": "4",
+          "net": "R_R_3V3"
+        }
+      ]
+    }
+  ]
+}
