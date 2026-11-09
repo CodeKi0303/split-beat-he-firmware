@@ -278,6 +278,11 @@ static void right_adc_tuning(void)
         complete_reply(true);fw_runtime_poll();
         assert(!fw_runtime_busy()&&!fw_runtime_maintenance());
     }
+    setup();adc_writes=0U;rate=32000U;window=6U;
+    uint8_t q[64];request(q,ADC_PAIR_COMMAND);
+    inject_frame(q);fw_runtime_poll();fw_runtime_poll();
+    assert(split_sends==1U&&!adc_writes&&!split_out[6]&&split_out[7]==5U);
+    assert(split_out[9]==0x7dU&&split_out[12]==6U);
 }
 #endif
 #endif

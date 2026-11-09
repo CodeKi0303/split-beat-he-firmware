@@ -6,7 +6,7 @@
 bool performance_command(const uint8_t query[64],uint8_t reply[64]);
 #if SCAN_ADC_PHASE_PAIR
 #include "keyboard.h"
-bool adc_tuning_command(c77_engine *engine,const uint8_t query[64],uint8_t reply[64],uint32_t now);
+bool adc_tuning_command(c77_engine *engine,const uint8_t query[64],uint8_t reply[64],uint32_t now,bool allow_write);
 #endif
 bool performance_busy_reply(const uint8_t query[64],uint8_t reply[64]);
 /* Main-context only. Counters wrap modulo 2^32; first loop has no gap. */

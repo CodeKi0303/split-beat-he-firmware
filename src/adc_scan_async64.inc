@@ -30,12 +30,10 @@ static uint32_t dma_started,previous_boundary_cycle,have_previous_boundary,last_
 #if SCAN_ADC_PHASE_PAIR
 static uint32_t active_rate=SCAN_TARGET_HZ;
 static uint32_t ring_cycles=ASYNC_RING_CYCLES,copy_margin_cycles=ASYNC_COPY_MARGIN_CYCLES;
-/* Zero preserves the v0.3.32 per-key defaults until a window is selected. */
-static uint8_t active_filter;
+#define ADC_DEFAULT_FILTER 1U
+static uint8_t active_filter=ADC_DEFAULT_FILTER;
 uint32_t adc_scan_rate(void) {return active_rate;}
 uint8_t adc_scan_filter(void) {return active_filter;}
-static unsigned filter_frames(unsigned unit,unsigned rank)
-{return active_filter?active_filter:(unit==1U && rank==0U?ASYNC_AVERAGE_SCANS:1U);}
 #else
 #define ring_cycles ASYNC_RING_CYCLES
 #define copy_margin_cycles ASYNC_COPY_MARGIN_CYCLES
@@ -207,10 +205,11 @@ bool adc_scan_bank_snapshot(unsigned unit,c77_sample_t *out)
     const unsigned key_count=unit==0U?SCAN_ADC1_KEYS:SCAN_ADC_RANKS-SCAN_ADC1_KEYS;
     const unsigned latest=ASYNC_AVERAGE_SCANS-1U;
 #if SCAN_ADC_PHASE_PAIR
-    const unsigned first_frame=ASYNC_AVERAGE_SCANS-filter_frames(unit,0U);
+    const unsigned frames=active_filter;
 #else
-    const unsigned first_frame=0U;
+    const unsigned frames=ASYNC_AVERAGE_SCANS;
 #endif
+    const unsigned first_frame=ASYNC_AVERAGE_SCANS-frames;
     const uint32_t old=__get_BASEPRI();
     __set_BASEPRI_MAX(SCAN_ADC_IRQ_PRIORITY<<(8U-__NVIC_PRIO_BITS));__DSB();__ISB();
     const uint32_t started=DWT->CYCCNT;
@@ -241,12 +240,7 @@ bool adc_scan_bank_snapshot(unsigned unit,c77_sample_t *out)
     c77_sample_t sample={0};
     for(unsigned rank=0;rank<ranks;rank++) {
         uint32_t sum=0U;
-#if SCAN_ADC_PHASE_PAIR
-        const unsigned first_sample=ASYNC_AVERAGE_SCANS-filter_frames(unit,rank);
-#else
-        const unsigned first_sample=0U;
-#endif
-        for(unsigned i=first_sample;i<ASYNC_AVERAGE_SCANS;i++) {
+        for(unsigned i=first_frame;i<ASYNC_AVERAGE_SCANS;i++) {
             if(history[i][rank]>4095U) {
                 const uint32_t mask=__get_BASEPRI();
                 __set_BASEPRI_MAX(SCAN_ADC_IRQ_PRIORITY<<(8U-__NVIC_PRIO_BITS));__DSB();__ISB();
@@ -261,14 +255,10 @@ bool adc_scan_bank_snapshot(unsigned unit,c77_sample_t *out)
 #if SCAN_ADC_PHASE_PAIR
         if(unit==0U || key!=0U) {
             const unsigned rank=unit==0U?key*2U:key*2U-1U;
-            const unsigned frames=filter_frames(unit,rank);
             sample.raw[first+key]=(uint16_t)((history[latest][rank]+history[latest][rank+1U]+1U)/2U);
             sample.hall_filtered[first+key]=(uint16_t)((rank_sums[rank]+rank_sums[rank+1U]+frames)/(2U*frames));
             continue;
         }
-        const unsigned frames=filter_frames(unit,key);
-#else
-        const unsigned frames=ASYNC_AVERAGE_SCANS;
 #endif
         sample.raw[first+key]=history[latest][key];
         sample.hall_filtered[first+key]=(uint16_t)((rank_sums[key]+frames/2U)/frames);
@@ -501,7 +491,7 @@ bool adc_scan_start(void)
 static bool valid_tuning(uint32_t hz,uint8_t filter)
 {
     return (hz==8000U||hz==16000U||hz==32000U||hz==64000U||hz==96000U)&&
-           (filter==0U||filter==1U||filter==2U||filter==4U||filter==6U||filter==8U);
+           (filter==1U||filter==2U||filter==4U||filter==6U||filter==8U);
 }
 bool adc_scan_parse_tuning(const uint8_t payload[5],uint32_t *hz,uint8_t *filter)
 {

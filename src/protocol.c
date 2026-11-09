@@ -31,7 +31,7 @@ bool c77_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t now,ui
         uint32_t capabilities=(HARDWARE_REVISION==86?0x3ffu:0x33fu)|C77_CAP_SAVE_OUTPUT;
 #if SCAN_ADC_PHASE_PAIR
         p32(out+8,adc_scan_rate());
-        capabilities|=C77_CAP_ADC_TUNING|C77_CAP_ADC_PAIR;
+        capabilities|=C77_CAP_ADC_TUNING|C77_CAP_ADC_PAIR|C77_CAP_ADC_PAIR_READ;
 #endif
 #if HARDWARE_REVISION == 86
         capabilities|=C77_CAP_KEY_CHORD;

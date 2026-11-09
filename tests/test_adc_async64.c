@@ -142,7 +142,7 @@ static void advance(unsigned unit,unsigned frames,bool service)
 static void reset(void)
 {
 #if SCAN_ADC_PHASE_PAIR
-    active_filter=0U;
+    active_filter=ADC_DEFAULT_FILTER;
 #endif
     memset((void*)&scan_state,0,sizeof scan_state);memset((void*)banks,0,sizeof banks);
 #if !ROLE_LEFT
@@ -174,11 +174,10 @@ static void check_mean(unsigned unit,const c77_sample_t *sample,uint32_t sequenc
     for(unsigned rank=0;rank<key_count;rank++) {
         unsigned frames=8U;
 #if SCAN_ADC_PHASE_PAIR
-        if(active_filter)frames=active_filter;
+        frames=active_filter;
         if(unit==0U || rank>0U) {
             const unsigned a=unit==0U?2U*rank:2U*rank-1U;
             assert(sample->raw[first+rank]==(value_at(unit,sequence,a)+value_at(unit,sequence,a+1U)+1U)/2U);
-            if(!active_filter)frames=1U;
             uint32_t sum=0U;
             for(unsigned i=0;i<frames;i++)sum+=value_at(unit,sequence-i,a)+value_at(unit,sequence-i,a+1U);
             assert(sample->hall_filtered[first+rank]==(sum+frames)/(2U*frames));
@@ -285,12 +284,14 @@ static void test_stale_faults_wrap_stop(void)
     advance(0U,1U,true);assert(snapshot(0U,&out));check_mean(0U,&out,8U);
 }
 #if !ROLE_LEFT
+#if !SCAN_ADC_PHASE_PAIR
 static uint16_t average_at(unsigned unit,uint32_t last,unsigned rank)
 {
     uint32_t sum=0U;
     for(unsigned i=0;i<8U;i++)sum+=value_at(unit,last-i,rank);
     return (uint16_t)((sum+4U)/8U);
 }
+#endif
 static uint16_t satellite_expected(unsigned unit,uint32_t last,unsigned key)
 {
 #if SCAN_ADC_PHASE_PAIR
@@ -298,8 +299,10 @@ static uint16_t satellite_expected(unsigned unit,uint32_t last,unsigned key)
         const unsigned rank=unit==0U?2U*key:2U*key-1U;
         return (uint16_t)((value_at(unit,last,rank)+value_at(unit,last,rank+1U)+1U)/2U);
     }
-#endif
+    return value_at(unit,last,key);
+#else
     return average_at(unit,last,key);
+#endif
 }
 static void test_satellite_s7_publication(void)
 {
@@ -335,6 +338,7 @@ int main(void)
     reset();advance(0U,8U,true);advance(1U,8U,true);
     c77_sample_t latest;
     assert(snapshot(0U,&latest)&&snapshot(1U,&latest));
+    assert(adc_scan_filter()==1U&&latest.hall_filtered[4]==latest.raw[4]);
 #if !ROLE_LEFT
     advance(0U,1U,true);advance(1U,1U,true);adc_scan_satellite_service();
     assert(adc_scan_snapshot(&latest));

@@ -136,15 +136,17 @@ class KeyboardClient:
         # opcodes must never bypass the normal configuration mutation gate.
         if type(op) is not int or not (1 <= op <= 10 or 0x40 <= op <= ADC_PAIR):
             raise ProtocolError("Unsupported configuration opcode; firmware updates require the dedicated updater")
-        mutates = op in MUTATIONS or op == ADC_PAIR or (op == ADC_TUNING and bool(payload))
+        mutates = op in MUTATIONS or (op in (ADC_TUNING, ADC_PAIR) and bool(payload))
         if mutates and not self.write_enabled:
             raise PermissionError("read-only session: restart with --write-enabled for configuration changes")
         with self.lock:
-            if (mutates or op in (ADC_TUNING, ADC_COMPARE)) and not self.identified:
+            if (mutates or op in (ADC_TUNING, ADC_COMPARE, ADC_PAIR)) and not self.identified:
                 self.info()
             if op in (ADC_TUNING, ADC_COMPARE) and not self.device_info["capabilities"] & CAP_ADC_TUNING:
                 raise ProtocolError("This firmware does not support ADC tuning")
-            if op == ADC_PAIR and not self.device_info["capabilities"] & CAP_ADC_PAIR:
+            if op == ADC_TUNING and payload and self.device_info["capabilities"] & CAP_ADC_PAIR_READ:
+                raise ProtocolError("ADC settings must be applied to both halves")
+            if op == ADC_PAIR and not self.device_info["capabilities"] & (CAP_ADC_PAIR if payload else CAP_ADC_PAIR_READ):
                 raise ProtocolError("This firmware does not support paired ADC tuning")
             if op == SET_BINDING:
                 require_binding_capability(decode_binding(payload), self.device_info["capabilities"])
@@ -189,8 +191,8 @@ class KeyboardClient:
 
     def adc_tuning(self, rate=None, window=None, *, paired=False):
         payload = b""
-        if paired or rate is not None or window is not None:
-            if type(rate) is not int or rate not in ADC_SCAN_RATES or type(window) is not int or window not in ADC_WINDOWS:
+        if rate is not None or window is not None:
+            if type(rate) is not int or rate not in ADC_SCAN_RATES or type(window) is not int or window not in ADC_WINDOWS[1:]:
                 raise ProtocolError("Unsupported ADC scan rate or averaging window")
             payload = struct.pack("<IB", rate, window)
         reply = self.request(ADC_PAIR if paired else ADC_TUNING, payload)

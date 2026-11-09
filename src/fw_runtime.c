@@ -50,7 +50,14 @@ bool fw_runtime_request(const uint8_t q[64])
     if(q[3]==ADC_PAIR_COMMAND && mode==FW_UPDATE_MODE_APP && !maintenance && !fw_runtime_busy()){
         uint32_t hz;
         uint8_t filter;
-        if(!update_frame_valid(q)||q[6]||q[7]!=5U)error_reply(q,FW_UPDATE_BAD_PACKET);
+        if(!update_frame_valid(q)||q[6]||(q[7]!=0U&&q[7]!=5U))error_reply(q,FW_UPDATE_BAD_PACKET);
+        else if(!q[7]){
+            error_reply(q,0U);
+            hz=adc_scan_rate();
+            for(unsigned i=0;i<4U;i++)reply[8U+i]=(uint8_t)(hz>>(8U*i));
+            reply[12]=adc_scan_filter();reply[7]=5U;
+            update_frame_finish(reply);
+        }
         else if(!adc_scan_parse_tuning(q+8,&hz,&filter))error_reply(q,FW_UPDATE_BAD_CONFIG);
         else if(!adc_scan_tune(hz,filter)||adc_scan_rate()!=hz||adc_scan_filter()!=filter)error_reply(q,FW_UPDATE_NOT_READY);
         else{

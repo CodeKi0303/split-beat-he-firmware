@@ -161,6 +161,9 @@ int main(void){
         CPU_PROFILE_END(prof_right,CPU_PROF_RIGHT);
         CPU_PROFILE_BEGIN(prof_report);
         now=board_micros();
+#if SCAN_ADC_PHASE_PAIR
+        adc_pair_watch_link(now);
+#endif
         c77_tick(&engine,now);
         if(engine.restore_output_pending&&usb_configured()
 #if SCAN_ADC_PHASE_PAIR
@@ -247,7 +250,7 @@ int main(void){
                     (response_pending=(uint8_t)performance_busy_reply(request,response)))){
                     CPU_PROFILE_END(prof_vendor,CPU_PROF_VENDOR);continue;
                 }
-                if(adc_tuning_command(&engine,request,response,now)){
+                if(adc_tuning_command(&engine,request,response,now,false)){
                     response_pending=1;CPU_PROFILE_END(prof_vendor,CPU_PROF_VENDOR);continue;
                 }
 #endif

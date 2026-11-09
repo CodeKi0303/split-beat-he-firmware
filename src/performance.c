@@ -39,7 +39,7 @@ static void put16(uint8_t *p,uint16_t value)
 {p[0]=(uint8_t)value;p[1]=(uint8_t)(value>>8);}
 static void put32(uint8_t *p,uint32_t value)
 {put16(p,(uint16_t)value);put16(p+2,(uint16_t)(value>>16));}
-bool adc_tuning_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t now)
+bool adc_tuning_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t now,bool allow_write)
 {
     if(q[0]!='C'||q[1]!='7'||(q[3]!=ADC_TUNING_COMMAND&&q[3]!=ADC_COMPARE_COMMAND))return false;
     header(q,r,C77_OK);
@@ -51,7 +51,6 @@ bool adc_tuning_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t
         else if(!c77_source_fresh(e,0,now))r[6]=C77_NOT_READY;
         else{
             r[8]=(uint8_t)key;r[9]=adc_scan_filter();
-            if(!r[9])r[9]=key==SCAN_ADC1_KEYS?8U:1U;
             put32(r+10,e->local_bank_sequence[key>=SCAN_ADC1_KEYS]);
             put16(r+14,e->sample[0].raw[key]);put16(r+16,e->sample[0].hall_filtered[key]);
             put16(r+18,e->filtered[key]);r[7]=12U;
@@ -60,7 +59,8 @@ bool adc_tuning_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t
         if(q[7]==5U){
             uint32_t hz;
             uint8_t window;
-            if(e->output||e->restore_output_pending||e->cal_state||e->save_requested)r[6]=C77_BUSY;
+            if(!allow_write)r[6]=C77_BAD_COMMAND;
+            else if(e->output||e->restore_output_pending||e->cal_state||e->save_requested)r[6]=C77_BUSY;
             else if(!adc_scan_parse_tuning(q+8,&hz,&window))r[6]=C77_BAD_CONFIG;
             else if(hz!=adc_scan_rate()||window!=adc_scan_filter()||!c77_source_fresh(e,0,now)){
                 c77_disable(e);e->local_banks_seen=e->local_banks_valid=e->seen[0]=0U;

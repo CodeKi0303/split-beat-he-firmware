@@ -192,10 +192,13 @@ instrumented IRQ bodies, but observer overhead and uninstrumented time remain.
 Totals do not represent generic CPU utilization or end-to-end input latency.
 
 `0x47 ADC_TUNING` and `0x48 ADC_COMPARE` require capability `0x8000` on
-the C86 left paired-sampling app. `ADC_TUNING` reads with an empty payload or
-applies a 5-byte `u32 rate_hz, u8 window` payload. Rate choices are 8000, 16000,
+the C86 left paired-sampling app. `ADC_TUNING` reads with an empty payload.
+Before v0.3.36 it also accepted a left-only write. From v0.3.36, writes must
+use `ADC_PAIR` to apply a common 5-byte `u32 rate_hz, u8 window` payload.
+Rate choices are 8000, 16000,
 32000, 64000 and 96000. Window choices are 1 (latest scan), 2, 4, 6 and 8.
-Window 0 restores the legacy defaults (R uses 8 frames, the paired keys use 1).
+From v0.3.36 the boot default is window 1 for every Hall key. Older firmware
+could report window 0 (R used 8 frames, paired keys used 1).
 The response echoes the active pair. Changes require output off and no pending
 output restore, calibration or save. An averaging-only change keeps acquisition
 running and recomputes the latest completed window. A rate change re-arms DMA
@@ -216,7 +219,13 @@ relays one C7 request. The satellite validates the setting, applies the window
 or rate and echoes the active values. The master applies its setting only after a
 matching acknowledgement, then resumes S7. The acknowledgement is not an
 atomic commit. If delivery or a restart is uncertain, output stays off
-until a successful paired request. Normal S7 packet length is unchanged.
+until a successful paired write. From v0.3.36 a satellite that goes stale
+outside an ADC relay pause also requires a paired write before output can
+be enabled again. Normal S7 packet length is unchanged.
+From v0.3.36, capability `0x20000` also permits an empty `ADC_PAIR` request
+with output off. This returns the right board's active rate and window
+without applying either. It uses the same temporary S7 pause as a paired
+write. A failed read does not latch a write-uncertain state.
 
 `0x46 ADC_IRQ_PROBE` is available only on C86 left 64 kHz sampled-probe
 apps with INFO capability `0x1000`. Request `[0]` arms one 500 ms window
