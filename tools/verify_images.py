@@ -126,7 +126,7 @@ def main():
         satellite_async=a.adc_async96 and role=='right'
         assert ('adc_scan_satellite_service' in symbols)==satellite_async,'Application satellite ADC path does not match requested profile'
         if satellite_async:
-            assert info['split_reply_bytes']==32 and info['split_hall_input']=='12-bit eight-sample average per channel'
+            assert info['split_reply_bytes']==32 and info['split_hall_input']=='12-bit configured per-channel average'
         if a.hardware=='c86':
             assert symbols['fw_image_identity']==APP_BASE+0x400
             assert symbols['__update_metadata_base__']==METADATA_BASE
@@ -165,7 +165,12 @@ def main():
             assert info['filter_samples']==8 and info['filter_execution']=='per-scan IRQ running sum'
             assert symbols['DMA2_Stream1_IRQHandler']!=symbols['Default_Handler']
         if a.adc_async64 or a.adc_async96:
-            assert info['adc_resolution_bits']==12 and info['adc_instances']==[1,2] and info['adc_ranks']==[4,3]
+            paired = a.adc_async96
+            assert info['adc_resolution_bits']==12 and info['adc_instances']==[1,2] and info['adc_ranks']==([8,5] if paired else [4,3])
+            assert info['adc1_phase_paired']==paired
+            assert info['adc2_phase_paired']==paired
+            assert info['adc2_phase_pair_sample_cycles']==(32.5 if paired else None)
+            assert info['adc2_phase_pair_filter_scans']==(1 if paired else None)
             assert info['adc_effective_clock_hz']==40000000 and info['adc_sample_cycles']==64.5
             assert info['dma_scans_per_bank']==32 and info['dma_frames_per_irq']==16
             assert info['dma_irq_target_hz_per_bank']==scan_hz//16 and info['publication_target_hz'] is None

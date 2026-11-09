@@ -156,8 +156,8 @@ bool c77_update_left_bank(c77_engine *e,unsigned bank,const c77_sample_t *s,uint
     const bool first=!(e->local_banks_valid&bit)||
         (uint32_t)(now-e->local_bank_time[bank])>C86_LOCAL_BANK_MAX_AGE_US||
         (int32_t)(s->sequence-previous_sequence)<0;
-    const unsigned start=bank?SCAN_ADC1_RANKS:0U;
-    const unsigned end=bank?SCAN_ADC_RANKS:SCAN_ADC1_RANKS;
+    const unsigned start=bank?SCAN_ADC1_KEYS:0U;
+    const unsigned end=bank?SCAN_ADC_RANKS:SCAN_ADC1_KEYS;
     if(first&&seen){
         c77_disable(e);
         if(e->cal_key>=start&&e->cal_key<end){e->cal_state=0;e->cal_key=255;}

@@ -2,6 +2,10 @@
 #include "fw_update.h"
 #include "platform.h"
 #include "update_link.h"
+#include "scan_profile.h"
+#if SCAN_ADC_PHASE_PAIR && !ROLE_LEFT && !FW_UPDATE_BOOT
+#include "adc_async.h"
+#endif
 #include <string.h>
 #if ROLE_LEFT
 #include "usb_device.h"
@@ -42,6 +46,20 @@ bool fw_runtime_request(const uint8_t q[64])
     (void)q;return false;
 #else
     if(!q||q[0]!='C'||q[1]!='7')return false;
+#if SCAN_ADC_PHASE_PAIR && !ROLE_LEFT && !FW_UPDATE_BOOT
+    if(q[3]==ADC_PAIR_COMMAND && mode==FW_UPDATE_MODE_APP && !maintenance && !fw_runtime_busy()){
+        uint32_t hz;
+        uint8_t filter;
+        if(!update_frame_valid(q)||q[6]||q[7]!=5U)error_reply(q,FW_UPDATE_BAD_PACKET);
+        else if(!adc_scan_parse_tuning(q+8,&hz,&filter))error_reply(q,FW_UPDATE_BAD_CONFIG);
+        else if(!adc_scan_tune(hz,filter)||adc_scan_rate()!=hz||adc_scan_filter()!=filter)error_reply(q,FW_UPDATE_NOT_READY);
+        else{
+            error_reply(q,0U);
+            reply[7]=5U;memcpy(reply+8,q+8,5U);update_frame_finish(reply);
+        }
+        return true;
+    }
+#endif
     bool local=q[3]>=FW_UPDATE_INFO&&q[3]<=FW_UPDATE_READ;
 #if ROLE_LEFT
     bool remote=q[3]>=0x50U&&q[3]<=0x56U;

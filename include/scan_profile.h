@@ -78,6 +78,7 @@
 #error Async DMA96 requires an explicit C86 role at96k with no competing ADC profile
 #endif
 #define SCAN_ADC_ASYNC (C86_ADC_ASYNC64 || C86_ADC_ASYNC96)
+#define SCAN_ADC_PHASE_PAIR C86_ADC_ASYNC96
 
 #define SCAN_ADC_RANKS 7U
 #define SCAN_TIMER_HZ 120000000U
@@ -93,8 +94,9 @@
 #endif
 /* SCAN_DUAL_96K gates the existing14-bit Q5 pipeline: never enable it here. */
 #define SCAN_DUAL_96K 0
-#define SCAN_ADC1_RANKS 4U
-#define SCAN_ADC2_RANKS 3U
+#define SCAN_ADC1_KEYS 4U
+#define SCAN_ADC1_RANKS (SCAN_ADC_PHASE_PAIR ? 2U * SCAN_ADC1_KEYS : SCAN_ADC1_KEYS)
+#define SCAN_ADC2_RANKS (SCAN_ADC_PHASE_PAIR ? 5U : 3U)
 #if SCAN_ADC_ASYNC
 #define SCAN_PUBLICATION_HZ 0U /* Foreground consumes the latest complete window. */
 #else
@@ -154,8 +156,19 @@
 #endif
 /* RM0468 ADC1/2 fixed /2 follows the asynchronous /1 prescaler on H723. */
 #define SCAN_ADC_EFFECTIVE_HZ (SCAN_ADC_KERNEL_HZ / 2U)
+#if SCAN_ADC_PHASE_PAIR
+#define SCAN_ADC_PAIR_SAMPLE_CYCLES_X2 65U
+/* ADC1 runs eight short ranks. ADC2 runs one long rank and four short ranks. */
 #define SCAN_ADC_SEQUENCE_CYCLES_X2 \
-    (SCAN_ADC1_RANKS * (SCAN_ADC_SAMPLING_CYCLES_X2 + SCAN_ADC_CONVERSION_CYCLES_X2))
+    (SCAN_ADC1_RANKS * (SCAN_ADC_PAIR_SAMPLE_CYCLES_X2 + SCAN_ADC_CONVERSION_CYCLES_X2))
+_Static_assert(SCAN_ADC_SAMPLING_CYCLES_X2 + SCAN_ADC_CONVERSION_CYCLES_X2 +
+               (SCAN_ADC2_RANKS - 1U) * (SCAN_ADC_PAIR_SAMPLE_CYCLES_X2 + SCAN_ADC_CONVERSION_CYCLES_X2) <=
+               SCAN_ADC_SEQUENCE_CYCLES_X2, "ADC2 exceeds the longest sequence");
+#else
+#define SCAN_ADC_SEQUENCE_CYCLES_X2 \
+    ((SCAN_ADC1_RANKS > SCAN_ADC2_RANKS ? SCAN_ADC1_RANKS : SCAN_ADC2_RANKS) * \
+     (SCAN_ADC_SAMPLING_CYCLES_X2 + SCAN_ADC_CONVERSION_CYCLES_X2))
+#endif
 
 _Static_assert(SCAN_TIMER_HZ % SCAN_TARGET_HZ == 0U, "Scan timer must divide exactly");
 _Static_assert(SCAN_ADC_EFFECTIVE_HZ <= 50000000U, "H723 ADC clock exceeds DS13313 limit");

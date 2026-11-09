@@ -9,6 +9,10 @@ def main():
         exe = compile_target(f'test_fw_runtime_{role_left}_{boot}', sources, [
             'HARDWARE_REVISION=86', f'ROLE_LEFT={role_left}', f'FW_UPDATE_BOOT={boot}'])
         subprocess.run([str(exe)], check=True)
+    right_pair = compile_target('test_fw_runtime_right_adc_pair', sources, [
+        'HARDWARE_REVISION=86', 'ROLE_LEFT=0', 'FW_UPDATE_BOOT=0',
+        'C86_SCAN_TARGET_HZ=96000', 'C86_ADC_ASYNC96=1'])
+    subprocess.run([str(right_pair)], check=True)
     diagnostic_sources = [ROOT / p for p in (
         'src/performance.c', 'src/update_link_codec.c', 'tests/test_performance.c')]
     diagnostic_exe = compile_target('test_performance', diagnostic_sources, [
@@ -28,6 +32,10 @@ def main():
         'HARDWARE_REVISION=86', 'ROLE_LEFT=1', 'C86_ADC_CAPTURE_DIAG=1',
         'C86_ADC_IRQ_PROBE=1', 'ADC_IRQ_PROBE_HOST_TEST=1'])
     subprocess.run([str(probe_exe)], check=True)
+    pair_exe = compile_target('test_adc_pair', [ROOT / p for p in (
+        'src/update_link_codec.c', 'tests/test_adc_pair.c')], [
+            'HARDWARE_REVISION=86', 'ROLE_LEFT=1', 'C86_SCAN_TARGET_HZ=96000', 'C86_ADC_ASYNC96=1'])
+    subprocess.run([str(pair_exe)], check=True)
 
 if __name__ == '__main__':
     main()

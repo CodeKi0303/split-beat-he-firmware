@@ -301,18 +301,25 @@ def main():
                            'adc_conversion_with_trigger_latency_us': (longest_ranks * (64.5 + 6.5) + 3.5) / 40,
                            'adc_acquisition_us_per_channel': 64.5 / 40})
         if async_adc:
-            report.update({'dma_scans_per_bank': 32, 'dma_frames_per_irq': 16,
+            paired = args.adc_async96
+            longest_cycles = 8 * (32.5 + 6.5) if paired else 4 * (64.5 + 6.5)
+            report.update({'adc_ranks': [8, 5] if paired else [4, 3],
+                           'adc1_phase_paired': paired,
+                           'adc2_phase_paired': paired,
+                           'adc2_phase_pair_sample_cycles': 32.5 if paired else None,
+                           'adc2_phase_pair_filter_scans': 1 if paired else None,
+                           'dma_scans_per_bank': 32, 'dma_frames_per_irq': 16,
                            'dma_irq_target_hz_per_bank': scan_hz // 16, 'publication_target_hz': None,
                            'publication_mode': 'foreground latest completed per bank',
                            'filter_samples': 8, 'filter_execution': 'foreground per-ADC eight-sample average',
                            'sample_frame_bytes': 48,
-                           'adc_longest_conversion_us': 4 * (64.5 + 6.5) / 40,
-                           'adc_conversion_with_trigger_latency_us': (4 * (64.5 + 6.5) + 3.5) / 40,
+                           'adc_longest_conversion_us': longest_cycles / 40,
+                           'adc_conversion_with_trigger_latency_us': (longest_cycles + 3.5) / 40,
                            'adc_acquisition_us_per_channel': 64.5 / 40,
                            'adc_sequence_meaning': 'minimum completed scan cursor across both ADC banks'})
         if args.adc_async96 and role == 'right':
             report.update({'split_reply_bytes': 32,
-                           'split_hall_input': '12-bit eight-sample average per channel'})
+                           'split_hall_input': '12-bit configured per-channel average'})
         report['hardware_evidence_sha256'] = evidence
         if profile:
             report['native_board_sha256'] = profile['native_board_sha256']

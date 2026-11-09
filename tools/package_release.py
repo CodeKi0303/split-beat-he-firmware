@@ -110,7 +110,7 @@ def main():
             assert info['adc_effective_clock_hz']==30000000 and info['adc_ranks']==[4,3]
         if a.adc_async64 or a.adc_async96:
             assert verification[role]['adc_dual64']==a.adc_async64
-            assert info['adc_resolution_bits']==12 and info['adc_instances']==[1,2] and info['adc_ranks']==[4,3]
+            assert info['adc_resolution_bits']==12 and info['adc_instances']==[1,2] and info['adc_ranks']==([8,5] if a.adc_async96 else [4,3])
             assert info['adc_effective_clock_hz']==40000000 and info['adc_sample_cycles']==64.5
             assert info['dma_scans_per_bank']==32 and info['dma_frames_per_irq']==16
             assert info['dma_irq_target_hz_per_bank']==scan_hz//16 and info['publication_target_hz'] is None
@@ -118,7 +118,7 @@ def main():
             assert info['filter_samples']==8 and info['filter_execution']=='foreground per-ADC eight-sample average'
             assert info['sample_frame_bytes']==48 and info['hall_decision_precision']=='legacy integer ADC'
         if a.adc_async96 and role=='right':
-            assert info['split_reply_bytes']==32 and info['split_hall_input']=='12-bit eight-sample average per channel'
+            assert info['split_reply_bytes']==32 and info['split_hall_input']=='12-bit configured per-channel average'
         if scan_hz==75000:
             assert verification[role]['scan_target_hz']==75000 and verification[role]['adc_dual64'] is False
             assert info['adc_instances']==[1] and info['adc_resolution_bits']==12 and info['adc_ranks']==[7]
@@ -235,7 +235,8 @@ def main():
     if a.adc_async64 or a.adc_async96:
         report.update({'roles':roles,'initial_flash':'Not included: existing C86 permanent updater required',
                        'right_app_changed':'right' in roles,'settings_migration':False,'adc_dual64':a.adc_async64,
-                       'adc_instances':[1,2],'adc_ranks':[4,3],'adc_effective_clock_hz':40000000,
+                       'adc_instances':[1,2],'adc_ranks':[8,5] if a.adc_async96 else [4,3],
+                       'adc_effective_clock_hz':40000000,
                        'adc_resolution_bits':12,'adc_sample_cycles':64.5,'filter_samples':8,'sample_frame_bytes':48,
                        'decision_units':'legacy integer12-bit ADC','dma_scans_per_bank':32,
                        'dma_frames_per_irq':16,'dma_irq_target_hz_per_bank':scan_hz//16,
@@ -244,7 +245,7 @@ def main():
                        'adc_sequence_meaning':'minimum completed scan cursor across both ADC banks',
                        'installation_status':'PREPARED_NOT_INSTALLED'})
         if 'right' in roles:
-            report.update({'split_reply_bytes':32,'split_hall_input':'12-bit eight-sample average per channel'})
+            report.update({'split_reply_bytes':32,'split_hall_input':'12-bit configured per-channel average'})
     (out/'release.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
     archive=ROOT/'dist'/f'{name}.zip'
     with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:

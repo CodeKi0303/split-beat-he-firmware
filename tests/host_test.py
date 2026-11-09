@@ -125,7 +125,7 @@ class HostTests(unittest.TestCase):
         for write_enabled in (False, True):
             t = NoIO()
             c = KeyboardClient(t, write_enabled)
-            for op in [*range(0x30, 0x37), *range(0x50, 0x57), 0x3f, 0x47, 0, 11, 255, True, 1.0]:
+            for op in [*range(0x30, 0x37), *range(0x50, 0x57), 0x3f, 0x4a, 0, 11, 255, True, 1.0]:
                 with self.assertRaisesRegex(ProtocolError, "dedicated updater"):
                     c.request(op, b"UPD3")
             self.assertEqual(t.calls, 0)

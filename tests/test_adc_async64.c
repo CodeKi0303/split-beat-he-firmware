@@ -141,6 +141,9 @@ static void advance(unsigned unit,unsigned frames,bool service)
 }
 static void reset(void)
 {
+#if SCAN_ADC_PHASE_PAIR
+    active_filter=0U;
+#endif
     memset((void*)&scan_state,0,sizeof scan_state);memset((void*)banks,0,sizeof banks);
 #if !ROLE_LEFT
     satellite_reset();
@@ -167,13 +170,27 @@ static void check_mean(unsigned unit,const c77_sample_t *sample,uint32_t sequenc
 {
     assert(sample->sequence==sequence && sample->valid && sample->hall_filtered_valid);
     const unsigned first=unit?4U:0U;
-    for(unsigned rank=0;rank<ranks_for(unit);rank++) {
+    const unsigned key_count=unit?3U:4U;
+    for(unsigned rank=0;rank<key_count;rank++) {
+        unsigned frames=8U;
+#if SCAN_ADC_PHASE_PAIR
+        if(active_filter)frames=active_filter;
+        if(unit==0U || rank>0U) {
+            const unsigned a=unit==0U?2U*rank:2U*rank-1U;
+            assert(sample->raw[first+rank]==(value_at(unit,sequence,a)+value_at(unit,sequence,a+1U)+1U)/2U);
+            if(!active_filter)frames=1U;
+            uint32_t sum=0U;
+            for(unsigned i=0;i<frames;i++)sum+=value_at(unit,sequence-i,a)+value_at(unit,sequence-i,a+1U);
+            assert(sample->hall_filtered[first+rank]==(sum+frames)/(2U*frames));
+            continue;
+        }
+#endif
         uint32_t sum=0U;
-        for(unsigned i=0;i<8U;i++)sum+=value_at(unit,sequence-7U+i,rank);
+        for(unsigned i=0;i<frames;i++)sum+=value_at(unit,sequence-i,rank);
         assert(sample->raw[first+rank]==value_at(unit,sequence,rank));
-        assert(sample->hall_filtered[first+rank]==(sum+4U)/8U);
+        assert(sample->hall_filtered[first+rank]==(sum+frames/2U)/frames);
     }
-    for(unsigned rank=0;rank<7U;rank++)if(rank<first||rank>=first+ranks_for(unit))
+    for(unsigned rank=0;rank<7U;rank++)if(rank<first||rank>=first+key_count)
         assert(!sample->raw[rank] && !sample->hall_filtered[rank]);
 }
 static void test_latest_independent(void)
@@ -201,8 +218,8 @@ static void test_latest_independent(void)
 static void test_partial_and_pending(void)
 {
     reset();advance(0U,15U,true);c77_sample_t out;assert(snapshot(0U,&out));
-    /* ADC DMA has written only two of the four ranks of frame16. */
-    streams[0].NDTR-=2U;scan_buffer1.samples[15U*4U]=4000U;
+    /* ADC DMA has written only the first two ranks of frame16. */
+    streams[0].NDTR-=2U;scan_buffer1.samples[15U*SCAN_ADC1_RANKS]=4000U;
     assert(!snapshot(0U,&out));advance(0U,1U,false);
     assert(snapshot(0U,&out));check_mean(0U,&out,16U);
     assert(banks[0].boundary_sequence==0U && banks[0].last_snapshot_sequence==16U);
@@ -241,7 +258,7 @@ static void test_stale_faults_wrap_stop(void)
     assert(!scan_state.running&&scan_state.stop_reason==SPLIT_ADC_STOP_FLAGS);
     reset();DMA2->LISR=DMA_LISR_TCIF1;DMA2_Stream1_IRQHandler();
     assert(!scan_state.running&&scan_state.stop_reason==SPLIT_ADC_STOP_FLAGS);
-    reset();advance(0U,8U,true);scan_buffer1.samples[0]=4096U;
+    reset();advance(0U,8U,true);scan_buffer1.samples[7U*SCAN_ADC1_RANKS]=4096U;
     assert(!snapshot(0U,&out)&&!banks[0].snapshot_seen&&scan_state.stop_reason==SPLIT_ADC_STOP_RAW_RANGE);
     reset();advance(0U,8U,true);DMA2->LISR|=DMA_LISR_TEIF1;
     assert(!snapshot(0U,&out)&&scan_state.dma_errors==1U&&!scan_state.running);
@@ -274,6 +291,16 @@ static uint16_t average_at(unsigned unit,uint32_t last,unsigned rank)
     for(unsigned i=0;i<8U;i++)sum+=value_at(unit,last-i,rank);
     return (uint16_t)((sum+4U)/8U);
 }
+static uint16_t satellite_expected(unsigned unit,uint32_t last,unsigned key)
+{
+#if SCAN_ADC_PHASE_PAIR
+    if(unit==0U||key!=0U){
+        const unsigned rank=unit==0U?2U*key:2U*key-1U;
+        return (uint16_t)((value_at(unit,last,rank)+value_at(unit,last,rank+1U)+1U)/2U);
+    }
+#endif
+    return average_at(unit,last,key);
+}
 static void test_satellite_s7_publication(void)
 {
     reset();c77_sample_t reply,decoded;uint8_t frame[32];
@@ -282,13 +309,13 @@ static void test_satellite_s7_publication(void)
     advance(0U,10U,true);adc_scan_satellite_service();assert(!adc_scan_snapshot(&reply));
     advance(1U,8U,true);adc_scan_satellite_service();assert(adc_scan_snapshot(&reply));
     assert(reply.sequence==8U&&reply.digital==5U&&reply.encoders[0]==12U&&reply.encoders[1]==23U);
-    for(unsigned rank=0;rank<4U;rank++)assert(reply.raw[rank]==average_at(0U,10U,rank));
-    for(unsigned rank=0;rank<3U;rank++)assert(reply.raw[rank+4U]==average_at(1U,8U,rank));
+    for(unsigned rank=0;rank<4U;rank++)assert(reply.raw[rank]==satellite_expected(0U,10U,rank));
+    for(unsigned rank=0;rank<3U;rank++)assert(reply.raw[rank+4U]==satellite_expected(1U,8U,rank));
     c77_split_reply(frame,28U,&reply);
     assert(c77_split_decode(frame,&decoded)&&decoded.valid&&decoded.sequence==8U&&c77_split_sequence(frame)==28U);
     assert(!memcmp(reply.raw,decoded.raw,sizeof reply.raw));
     advance(1U,1U,true);adc_scan_satellite_service();assert(adc_scan_snapshot(&reply));
-    assert(reply.sequence==9U&&reply.raw[0]==average_at(0U,10U,0U)&&reply.raw[4]==average_at(1U,9U,0U));
+    assert(reply.sequence==9U&&reply.raw[0]==satellite_expected(0U,10U,0U)&&reply.raw[4]==satellite_expected(1U,9U,0U));
     /* A newly advanced bank cannot refresh the other bank's age. */
     clock_us+=ASYNC_SATELLITE_MAX_AGE_US+1U;
     advance(0U,1U,true);adc_scan_satellite_service();assert(!adc_scan_snapshot(&reply));
@@ -303,6 +330,16 @@ int main(void)
     _Static_assert(ASYNC_SCAN_CYCLES==(SCAN_TARGET_HZ==96000U?2500U:3750U),"wrong DWT scan period");
     _Static_assert(ASYNC_COPY_MARGIN_CYCLES==(SCAN_TARGET_HZ==96000U?60000U:90000U),"wrong overwrite-time bound");
     test_latest_independent();test_partial_and_pending();test_copy_and_sum_races();test_stale_faults_wrap_stop();
+#if SCAN_ADC_PHASE_PAIR
+    const uint8_t windows[]={1U,2U,4U,6U,8U};
+    for(unsigned n=0;n<sizeof windows;n++){
+        reset();active_filter=windows[n];
+        for(unsigned unit=0;unit<2U;unit++){
+            c77_sample_t sample;advance(unit,17U,true);
+            assert(snapshot(unit,&sample));check_mean(unit,&sample,17U);
+        }
+    }
+#endif
 #if !ROLE_LEFT
     test_satellite_s7_publication();
 #endif

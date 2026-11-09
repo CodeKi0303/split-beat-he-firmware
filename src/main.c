@@ -9,6 +9,10 @@
 #if SCAN_ADC_ASYNC
 #include "adc_async.h"
 #endif
+#if SCAN_ADC_PHASE_PAIR && ROLE_LEFT
+#include "update_link.h"
+#include <string.h>
+#endif
 #if SCAN_ADC_CAPTURE_DIAG
 #include "adc_trace.h"
 #include "update_link.h"
@@ -36,6 +40,9 @@ static uint32_t session,last_aux,last_command,save_accepted_at;
 static uint8_t save_reply_queued;
 #if SCAN_ADC_CAPTURE_DIAG
 #include "adc_trace.inc"
+#endif
+#if SCAN_ADC_PHASE_PAIR
+#include "adc_pair.inc"
 #endif
 #endif
 int main(void){
@@ -77,6 +84,9 @@ int main(void){
         uint32_t now=board_micros();uint32_t current_session=usb_session_generation();
         if(session!=current_session){
             session=current_session;c77_disable(&engine);engine.cal_state=0;engine.cal_key=255;
+#if SCAN_ADC_PHASE_PAIR
+            adc_pair_cancel();
+#endif
             response_pending=0;engine.save_requested=0;save_reply_queued=0;
 #if defined(C86_CPU_PROFILE)
             cpu_profile_cancel();
@@ -97,6 +107,9 @@ int main(void){
             c77_keyboard_report_acked(&engine,completed,now);
 #if HARDWARE_REVISION==86
         fw_runtime_poll();
+#if SCAN_ADC_PHASE_PAIR
+        adc_pair_poll(now);
+#endif
         if(fw_runtime_maintenance()){
             c77_disable(&engine);engine.cal_state=0;engine.cal_key=255;
             engine.restore_output_pending=false;
@@ -149,7 +162,11 @@ int main(void){
         CPU_PROFILE_BEGIN(prof_report);
         now=board_micros();
         c77_tick(&engine,now);
-        if(engine.restore_output_pending&&usb_configured())
+        if(engine.restore_output_pending&&usb_configured()
+#if SCAN_ADC_PHASE_PAIR
+           && !adc_pair.uncertain
+#endif
+        )
             (void)c77_enable_output(&engine,now);
         {
             uint8_t keys[32];uint16_t consumer;c77_report(&engine,keys,&consumer);
@@ -176,6 +193,9 @@ int main(void){
             if(engine.save_requested){save_reply_queued=1;save_accepted_at=now;}
         }
         if(!response_pending&&!engine.save_requested&&(uint32_t)(now-last_command)>=1000u
+#if SCAN_ADC_PHASE_PAIR
+           && !adc_pair.pending
+#endif
 #if SCAN_ADC_CAPTURE_DIAG
            &&!adc_trace.pending
 #endif
@@ -221,6 +241,16 @@ int main(void){
                     CPU_PROFILE_END(prof_vendor,CPU_PROF_VENDOR);
                     continue;
                 }
+#if SCAN_ADC_PHASE_PAIR
+                if(adc_pair_request(request,now)||
+                   (adc_pair.uncertain&&request[3]==6U&&request[7]==1U&&request[8]==1U&&
+                    (response_pending=(uint8_t)performance_busy_reply(request,response)))){
+                    CPU_PROFILE_END(prof_vendor,CPU_PROF_VENDOR);continue;
+                }
+                if(adc_tuning_command(&engine,request,response,now)){
+                    response_pending=1;CPU_PROFILE_END(prof_vendor,CPU_PROF_VENDOR);continue;
+                }
+#endif
 #if SCAN_ADC_CAPTURE_DIAG
                 if(trace_request(request,now)){
                     CPU_PROFILE_END(prof_vendor,CPU_PROF_VENDOR);continue;

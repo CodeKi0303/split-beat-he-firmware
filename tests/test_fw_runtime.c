@@ -4,6 +4,7 @@
 #include "update_link.h"
 #include "platform.h"
 #include "usb_device.h"
+#include "adc_async.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -15,6 +16,21 @@ static unsigned pending_action,power_offs_at_core;
 static bool allow_usb,allow_split,usb_idle,split_idle,split_success,last_reset_enter;
 static bool input_queued,core_no_action;
 static uint8_t input[64],usb_out[64],split_out[64],core_status;
+#if SCAN_ADC_PHASE_PAIR && !ROLE_LEFT && !FW_UPDATE_BOOT
+static unsigned adc_writes;
+static bool adc_accept;
+static uint32_t rate;
+static uint8_t window;
+bool adc_scan_parse_tuning(const uint8_t p[5],uint32_t *hz,uint8_t *filter)
+{
+    static const uint8_t expected[]={0,0x7d,0,0,6U};
+    *hz=32000U;*filter=p[4];return !memcmp(p,expected,5U);
+}
+bool adc_scan_tune(uint32_t hz,uint8_t filter)
+{adc_writes++;if(!adc_accept)return false;rate=hz;window=filter;return true;}
+uint32_t adc_scan_rate(void){return rate;}
+uint8_t adc_scan_filter(void){return window;}
+#endif
 uint32_t board_micros(void){return now;}
 void board_update_pause(void){pauses++;}
 void board_update_resume(void){resumes++;}
@@ -246,6 +262,24 @@ static void right_transport(void){
     fw_runtime_poll();fw_runtime_poll();complete_reply(false);fw_runtime_poll();
     assert(!resets&&!resumes&&!pending_action&&cancels==1&&!fw_runtime_busy());
 }
+#if SCAN_ADC_PHASE_PAIR && !FW_UPDATE_BOOT
+static void right_adc_tuning(void)
+{
+    for(unsigned attempt=0;attempt<3U;attempt++){
+        setup();adc_writes=0U;adc_accept=attempt!=2U;
+        uint8_t q[64];request(q,ADC_PAIR_COMMAND);q[7]=5U;
+        q[9]=0x7dU;q[12]=attempt==1U?3U:6U;update_frame_finish(q);
+        inject_frame(q);fw_runtime_poll();fw_runtime_poll();
+        assert(split_sends==1U&&!pauses&&!resets&&!core_calls);
+        assert(split_out[3]==(ADC_PAIR_COMMAND|0x80U));
+        if(!attempt)assert(adc_writes==1U&&!split_out[6]&&split_out[7]==5U&&!memcmp(split_out+8,q+8,5U));
+        if(attempt==1U)assert(!adc_writes&&split_out[6]==FW_UPDATE_BAD_CONFIG);
+        if(attempt==2U)assert(adc_writes==1U&&split_out[6]==FW_UPDATE_NOT_READY);
+        complete_reply(true);fw_runtime_poll();
+        assert(!fw_runtime_busy()&&!fw_runtime_maintenance());
+    }
+}
+#endif
 #endif
 static void frame_codec(void){
     uint8_t q[64],out[64];request(q,FW_UPDATE_INFO);update_frame_parser parser={0};
@@ -262,6 +296,9 @@ int main(void){
     disconnect_cancels();relay_validation();relay_timeout();
 #else
     right_transport();
+#if SCAN_ADC_PHASE_PAIR && !FW_UPDATE_BOOT
+    right_adc_tuning();
+#endif
 #endif
     printf("fw_runtime role_left%d boot%d: ACK, cancellation, frame, relay and power guards PASS\n",ROLE_LEFT,FW_UPDATE_BOOT);
     return 0;

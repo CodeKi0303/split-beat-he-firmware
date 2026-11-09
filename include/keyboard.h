@@ -7,6 +7,7 @@ enum { C77_HALL=14, C77_INPUTS=28, C77_CONFIG_BYTES=476 };
 enum { C77_OK=0,C77_BAD_COMMAND,C77_BAD_PACKET,C77_BAD_INDEX,C77_BAD_CONFIG,C77_BUSY,C77_CAL_INVALID,C77_NOT_READY,C77_STORAGE_ERROR };
 enum { C77_BINDING_KEY_CHORD=6, C77_CAP_KEY_CHORD=0x2000 };
 enum { C77_CAP_SAVE_OUTPUT=0x4000 };
+enum { C77_CAP_ADC_TUNING=0x8000,C77_CAP_ADC_PAIR=0x10000 };
 typedef struct { uint16_t released,pressed,actuation,rt_press,rt_release,top_deadzone,noise,bottom_deadzone,curve_id; uint8_t flags; } c77_key_config;
 /* Chords pack the first two usages into code, low byte first. A zero
  * third_key means the chord has two ordinary keys. */
