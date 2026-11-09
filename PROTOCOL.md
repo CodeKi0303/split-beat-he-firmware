@@ -197,8 +197,10 @@ applies a 5-byte `u32 rate_hz, u8 window` payload. Rate choices are 8000, 16000,
 32000, 64000 and 96000. Window choices are 1 (latest scan), 2, 4, 6 and 8.
 Window 0 restores the legacy defaults (R uses 8 frames, the paired keys use 1).
 The response echoes the active pair. Changes require output off and no pending
-output restore, calibration or save. Applying restarts the left ADC/DMA,
-invalidates the old left snapshot and clears RT history. The choice lives in
+output restore, calibration or save. An averaging-only change keeps acquisition
+running and recomputes the latest completed window. A rate change re-arms DMA
+and TIM3 with the existing ADC configuration. Both invalidate old engine
+snapshots and clear RT history. The choice lives in
 RAM and is independent of USB polling and the saved calibration profile.
 
 `ADC_COMPARE` takes a u8 local Hall index (0..6). It returns the key index,
@@ -210,8 +212,8 @@ read-only snapshot and does not add traffic to the normal S7 link.
 
 `0x49 ADC_PAIR` requires capability `0x10000` and takes the same five-byte
 SET payload. With output off and a fresh satellite, the master pauses S7 and
-relays one C7 request. The satellite validates the setting, restarts its ADC
-and echoes the active values. The master applies its setting only after a
+relays one C7 request. The satellite validates the setting, applies the window
+or rate and echoes the active values. The master applies its setting only after a
 matching acknowledgement, then resumes S7. The acknowledgement is not an
 atomic commit. If delivery or a restart is uncertain, output stays off
 until a successful paired request. Normal S7 packet length is unchanged.

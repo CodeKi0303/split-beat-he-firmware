@@ -57,6 +57,17 @@ static void satellite_reset(void)
     satellite_bank_seen=0U;
 }
 #endif
+#if SCAN_ADC_PHASE_PAIR
+static void set_scan_filter(uint8_t filter)
+{
+    if(active_filter==filter)return;
+    active_filter=filter;
+    banks[0].snapshot_seen=banks[1].snapshot_seen=0U;
+#if !ROLE_LEFT
+    satellite_reset();
+#endif
+}
+#endif
 
 static unsigned ranks_for(unsigned unit) {return unit==0U?SCAN_ADC1_RANKS:SCAN_ADC2_RANKS;}
 static DMA_Stream_TypeDef *stream_for(unsigned unit) {return unit==0U?DMA2_Stream0:DMA2_Stream1;}
@@ -357,7 +368,10 @@ static int init_failed(uint32_t reason)
 {
     scan_state.init_error=reason;scan_state.errors++;adc_scan_stop();return 0;
 }
-bool adc_scan_start(void)
+#if SCAN_ADC_PHASE_PAIR
+static bool adc_configured;
+#endif
+static void reset_scan_state(void)
 {
     memset((void*)&scan_state,0,sizeof scan_state);memset((void*)banks,0,sizeof banks);
 #if !ROLE_LEFT
@@ -365,6 +379,36 @@ bool adc_scan_start(void)
 #endif
     scan_state.period_min_cycles=UINT32_MAX;
     dma_started=previous_boundary_cycle=have_previous_boundary=last_stats_sequence=0U;
+}
+static bool arm_scan(void)
+{
+    HAL_NVIC_ClearPendingIRQ(DMA2_Stream0_IRQn);HAL_NVIC_ClearPendingIRQ(DMA2_Stream1_IRQn);HAL_NVIC_ClearPendingIRQ(ADC_IRQn);
+    HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);HAL_NVIC_EnableIRQ(ADC_IRQn);
+    /* Both armed before TIM3 starts: no initial offset or free-running ADC. */
+    for(unsigned unit=0;unit<2;unit++) {
+        uint32_t *buffer=(uint32_t*)(uintptr_t)(unit==0U?(uintptr_t)&scan_buffer1:(uintptr_t)&scan_buffer2);
+        /* HAL may enable the ADC before a DMA-start failure. Include the
+         * attempted unit in cleanup, not only units which returned HAL_OK. */
+        dma_started|=1U<<unit;
+        if(HAL_ADC_Start_DMA(&scan_adc[unit],buffer,ASYNC_RING_SCANS*ranks_for(unit))!=HAL_OK)
+            return init_failed(SPLIT_ADC_INIT_DMA_START);
+    }
+    const uint32_t old_mask=__get_BASEPRI();
+    __set_BASEPRI_MAX(SCAN_ADC_IRQ_PRIORITY<<(8U-__NVIC_PRIO_BITS));__DSB();__ISB();
+    scan_state.running=1U;__DMB();
+    const HAL_StatusTypeDef started=HAL_TIM_Base_Start(&scan_timer);
+    const uint32_t started_cycle=DWT->CYCCNT;
+    banks[0].boundary_cycles=banks[1].boundary_cycles=started_cycle;
+    __DMB();__set_BASEPRI(old_mask);
+    if(started!=HAL_OK) return init_failed(SPLIT_ADC_INIT_TIMER_START);
+    return true;
+}
+bool adc_scan_start(void)
+{
+    reset_scan_state();
+#if SCAN_ADC_PHASE_PAIR
+    adc_configured=false;
+#endif
     if(SystemCoreClock!=C77_CPU_HZ || C77_CPU_HZ!=240000000U ||
        HAL_RCC_GetSysClockFreq()!=240000000U || HAL_RCC_GetHCLKFreq()!=120000000U ||
        HAL_RCC_GetPCLK1Freq()!=60000000U || (RCC->CFGR&RCC_CFGR_TIMPRE)!=0U ||
@@ -448,27 +492,10 @@ bool adc_scan_start(void)
     HAL_NVIC_SetPriority(DMA2_Stream0_IRQn,SCAN_ADC_IRQ_PRIORITY,0U);
     HAL_NVIC_SetPriority(DMA2_Stream1_IRQn,SCAN_ADC_IRQ_PRIORITY,0U);
     HAL_NVIC_SetPriority(ADC_IRQn,SCAN_ADC_IRQ_PRIORITY,0U);
-    HAL_NVIC_ClearPendingIRQ(DMA2_Stream0_IRQn);HAL_NVIC_ClearPendingIRQ(DMA2_Stream1_IRQn);HAL_NVIC_ClearPendingIRQ(ADC_IRQn);
-    HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);HAL_NVIC_EnableIRQ(ADC_IRQn);
-    /* Both armed before TIM3 starts: no initial offset or free-running ADC. */
-    for(unsigned unit=0;unit<2;unit++) {
-        uint32_t *buffer=(uint32_t*)(uintptr_t)(unit==0U?(uintptr_t)&scan_buffer1:(uintptr_t)&scan_buffer2);
-        /* HAL may enable the ADC before a DMA-start failure. Include the
-         * attempted unit in cleanup, not only units which returned HAL_OK. */
-        dma_started|=1U<<unit;
-        if(HAL_ADC_Start_DMA(&scan_adc[unit],buffer,ASYNC_RING_SCANS*ranks_for(unit))!=HAL_OK)
-            return init_failed(SPLIT_ADC_INIT_DMA_START);
-    }
-    /* Independent HT/TC service:4k boundaries/s per bank at64k,6k at96k. */
-    const uint32_t old_mask=__get_BASEPRI();
-    __set_BASEPRI_MAX(SCAN_ADC_IRQ_PRIORITY<<(8U-__NVIC_PRIO_BITS));__DSB();__ISB();
-    scan_state.running=1U;__DMB();
-    const HAL_StatusTypeDef started=HAL_TIM_Base_Start(&scan_timer);
-    const uint32_t started_cycle=DWT->CYCCNT;
-    banks[0].boundary_cycles=banks[1].boundary_cycles=started_cycle;
-    __DMB();__set_BASEPRI(old_mask);
-    if(started!=HAL_OK) return init_failed(SPLIT_ADC_INIT_TIMER_START);
-    return 1;
+#if SCAN_ADC_PHASE_PAIR
+    adc_configured=true;
+#endif
+    return arm_scan();
 }
 #if SCAN_ADC_PHASE_PAIR
 static bool valid_tuning(uint32_t hz,uint8_t filter)
@@ -482,19 +509,33 @@ bool adc_scan_parse_tuning(const uint8_t payload[5],uint32_t *hz,uint8_t *filter
     *filter=payload[4];
     return valid_tuning(*hz,*filter);
 }
-bool adc_scan_tune(uint32_t hz,uint8_t filter)
+/* Rate changes do not change the ADC clock, input ranks or acquisition
+ * window. HAL_ADC_Stop_DMA leaves the ADC calibration configuration intact. */
+static bool rearm_rate(uint32_t hz,uint8_t filter)
 {
-    if(!valid_tuning(hz,filter))return false;
-    const uint32_t old_rate=active_rate,old_ring=ring_cycles,old_margin=copy_margin_cycles;
-    const uint8_t old_filter=active_filter;
     adc_scan_stop();
     active_rate=hz;active_filter=filter;
     const uint32_t cycles=C77_CPU_HZ/hz;
     ring_cycles=ASYNC_RING_SCANS*cycles;
     copy_margin_cycles=(ASYNC_RING_SCANS-ASYNC_AVERAGE_SCANS)*cycles;
-    if(adc_scan_start())return true;
-    active_rate=old_rate;active_filter=old_filter;ring_cycles=old_ring;copy_margin_cycles=old_margin;
-    (void)adc_scan_start();
+    reset_scan_state();
+    __HAL_TIM_SET_AUTORELOAD(&scan_timer,SCAN_TIMER_HZ/hz-1U);
+    __HAL_TIM_SET_COUNTER(&scan_timer,0U);
+    TIM3->EGR=TIM_EGR_UG;
+    __HAL_TIM_CLEAR_FLAG(&scan_timer,TIM_FLAG_UPDATE);
+    return arm_scan();
+}
+bool adc_scan_tune(uint32_t hz,uint8_t filter)
+{
+    if(!adc_configured||!valid_tuning(hz,filter))return false;
+    if(scan_state.running&&active_rate==hz){
+        set_scan_filter(filter);
+        return true;
+    }
+    const uint32_t old_rate=active_rate;
+    const uint8_t old_filter=active_filter;
+    if(rearm_rate(hz,filter))return true;
+    (void)rearm_rate(old_rate,old_filter);
     return false;
 }
 #endif

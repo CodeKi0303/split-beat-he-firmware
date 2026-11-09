@@ -12,7 +12,7 @@
 #endif
 #define FW_UPDATE_PROTOCOL 1U
 /* Updater image version layout: major[31:24], minor[23:16], patch[15:0]. */
-#define FW_UPDATE_VERSION 0x00030022UL
+#define FW_UPDATE_VERSION 0x00030023UL
 /* Boot identity compatibility is independent of later application versions. */
 #define FW_UPDATE_BOOT_VERSION 0x00030000UL
 #define FW_UPDATE_BOOT_BASE 0x08000000UL

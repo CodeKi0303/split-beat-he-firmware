@@ -332,6 +332,21 @@ int main(void)
     test_latest_independent();test_partial_and_pending();test_copy_and_sum_races();test_stale_faults_wrap_stop();
 #if SCAN_ADC_PHASE_PAIR
     const uint8_t windows[]={1U,2U,4U,6U,8U};
+    reset();advance(0U,8U,true);advance(1U,8U,true);
+    c77_sample_t latest;
+    assert(snapshot(0U,&latest)&&snapshot(1U,&latest));
+#if !ROLE_LEFT
+    advance(0U,1U,true);advance(1U,1U,true);adc_scan_satellite_service();
+    assert(adc_scan_snapshot(&latest));
+#endif
+    set_scan_filter(4U);
+#if !ROLE_LEFT
+    assert(!adc_scan_snapshot(&latest));
+#endif
+    for(unsigned unit=0;unit<2U;unit++){
+        assert(snapshot(unit,&latest));check_mean(unit,&latest,producer[unit]);
+    }
+    assert(!timer_stop_calls&&!stopped_adcs&&scan_state.running);
     for(unsigned n=0;n<sizeof windows;n++){
         reset();active_filter=windows[n];
         for(unsigned unit=0;unit<2U;unit++){
