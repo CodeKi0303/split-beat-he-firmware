@@ -176,10 +176,14 @@ static void check_mean(unsigned unit,const c77_sample_t *sample,uint32_t sequenc
 #if SCAN_ADC_PHASE_PAIR
         frames=active_filter;
         if(unit==0U || rank>0U) {
-            const unsigned a=unit==0U?2U*rank:2U*rank-1U;
-            assert(sample->raw[first+rank]==(value_at(unit,sequence,a)+value_at(unit,sequence,a+1U)+1U)/2U);
+            unsigned a=unit==0U?2U*rank:2U*rank-1U,b=a+1U;
+#if ROLE_LEFT
+            if(unit==0U){a=rank;b=rank+4U;}
+            else {a=rank==1U?1U:2U;b=rank==1U?4U:3U;}
+#endif
+            assert(sample->raw[first+rank]==(value_at(unit,sequence,a)+value_at(unit,sequence,b)+1U)/2U);
             uint32_t sum=0U;
-            for(unsigned i=0;i<frames;i++)sum+=value_at(unit,sequence-i,a)+value_at(unit,sequence-i,a+1U);
+            for(unsigned i=0;i<frames;i++)sum+=value_at(unit,sequence-i,a)+value_at(unit,sequence-i,b);
             assert(sample->hall_filtered[first+rank]==(sum+frames)/(2U*frames));
             continue;
         }
@@ -327,6 +331,44 @@ static void test_satellite_s7_publication(void)
     reset();advance(1U,8U,true);adc_scan_satellite_service();assert(!adc_scan_snapshot(&reply));
 }
 #endif
+#if SCAN_ADC_PHASE_PAIR
+static void test_rank_pair_key_contract(void)
+{
+    /* Fixed expected physical ordering is independent of the inverse lookup.
+     * Distinct channel values detect accidental calibration/key relabeling. */
+    const uint8_t expected[2][8]={
+#if ROLE_LEFT
+        {0U,1U,2U,3U,0U,1U,2U,3U},
+        {0U,1U,2U,2U,1U,0U,0U,0U}
+#else
+        {0U,0U,1U,1U,2U,2U,3U,3U},
+        {0U,1U,1U,2U,2U,0U,0U,0U}
+#endif
+    };
+    reset();
+    for(unsigned unit=0;unit<2U;unit++){
+        advance(unit,8U,true);
+        const unsigned count=unit?3U:4U;
+        volatile uint16_t *ring=unit?scan_buffer2.samples:scan_buffer1.samples;
+        unsigned seen[4]={0};
+        for(unsigned rank=0;rank<ranks_for(unit);rank++){
+            assert(adc_rank_keys[unit][rank]==expected[unit][rank]);
+            seen[expected[unit][rank]]++;
+            for(unsigned frame=0;frame<8U;frame++)
+                ring[frame*ranks_for(unit)+rank]=(uint16_t)(500U+expected[unit][rank]*900U);
+        }
+        c77_sample_t sample;assert(snapshot(unit,&sample));
+        for(unsigned key=0;key<count;key++){
+            const unsigned logical=(unit?4U:0U)+key;
+            assert(seen[key]==(unit&&key==0U?1U:2U));
+            assert(sample.raw[logical]==500U+key*900U);
+            assert(sample.hall_filtered[logical]==sample.raw[logical]);
+            assert(expected[unit][adc_key_ranks[unit][key].first]==key);
+            assert(expected[unit][adc_key_ranks[unit][key].second]==key);
+        }
+    }
+}
+#endif
 int main(void)
 {
     _Static_assert(SCAN_ADC_ASYNC && SCAN_ADC_EFFECTIVE_HZ==40000000U && SCAN_TARGET_HZ==EXPECTED_SCAN_HZ,"wrong test profile");
@@ -334,6 +376,7 @@ int main(void)
     _Static_assert(ASYNC_COPY_MARGIN_CYCLES==(SCAN_TARGET_HZ==96000U?60000U:90000U),"wrong overwrite-time bound");
     test_latest_independent();test_partial_and_pending();test_copy_and_sum_races();test_stale_faults_wrap_stop();
 #if SCAN_ADC_PHASE_PAIR
+    test_rank_pair_key_contract();
     const uint8_t windows[]={1U,2U,4U,6U,8U};
     reset();advance(0U,8U,true);advance(1U,8U,true);
     c77_sample_t latest;

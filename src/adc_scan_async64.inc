@@ -68,6 +68,30 @@ static void set_scan_filter(uint8_t filter)
 #endif
 
 static unsigned ranks_for(unsigned unit) {return unit==0U?SCAN_ADC1_RANKS:SCAN_ADC2_RANKS;}
+#if SCAN_ADC_PHASE_PAIR
+typedef struct {uint8_t first,second;} adc_rank_pair;
+/* Keep physical acquisition slots separate from logical calibration/STATUS
+ * keys. Left interleaves ADC1 and separates Shift's pair; right keeps its
+ * qualified adjacent pairs. Runtime rates/filters share these same maps. */
+static const uint8_t adc_rank_keys[2][8]={
+#if ROLE_LEFT
+    {0U,1U,2U,3U,0U,1U,2U,3U},
+    {0U,1U,2U,2U,1U,0U,0U,0U}
+#else
+    {0U,0U,1U,1U,2U,2U,3U,3U},
+    {0U,1U,1U,2U,2U,0U,0U,0U}
+#endif
+};
+static const adc_rank_pair adc_key_ranks[2][4]={
+#if ROLE_LEFT
+    {{0U,4U},{1U,5U},{2U,6U},{3U,7U}},
+    {{0U,0U},{1U,4U},{2U,3U},{0U,0U}}
+#else
+    {{0U,1U},{2U,3U},{4U,5U},{6U,7U}},
+    {{0U,0U},{1U,2U},{3U,4U},{0U,0U}}
+#endif
+};
+#endif
 static DMA_Stream_TypeDef *stream_for(unsigned unit) {return unit==0U?DMA2_Stream0:DMA2_Stream1;}
 static uint32_t completion_mask(unsigned unit)
 {return unit==0U?(DMA_LISR_HTIF0|DMA_LISR_TCIF0):(DMA_LISR_HTIF1|DMA_LISR_TCIF1);}
@@ -254,9 +278,9 @@ bool adc_scan_bank_snapshot(unsigned unit,c77_sample_t *out)
     for(unsigned key=0;key<key_count;key++) {
 #if SCAN_ADC_PHASE_PAIR
         if(unit==0U || key!=0U) {
-            const unsigned rank=unit==0U?key*2U:key*2U-1U;
-            sample.raw[first+key]=(uint16_t)((history[latest][rank]+history[latest][rank+1U]+1U)/2U);
-            sample.hall_filtered[first+key]=(uint16_t)((rank_sums[rank]+rank_sums[rank+1U]+frames)/(2U*frames));
+            const adc_rank_pair pair=adc_key_ranks[unit][key];
+            sample.raw[first+key]=(uint16_t)((history[latest][pair.first]+history[latest][pair.second]+1U)/2U);
+            sample.hall_filtered[first+key]=(uint16_t)((rank_sums[pair.first]+rank_sums[pair.second]+frames)/(2U*frames));
             continue;
         }
 #endif
@@ -467,7 +491,11 @@ bool adc_scan_start(void)
         channel.SingleDiff=ADC_SINGLE_ENDED;channel.OffsetNumber=ADC_OFFSET_NONE;
         for(unsigned rank=0;rank<ranks_for(unit);rank++) {
             const unsigned first=unit==0U?0U:SCAN_ADC1_KEYS;
-            const unsigned key=SCAN_ADC_PHASE_PAIR?(rank+unit)/2U:rank;
+#if SCAN_ADC_PHASE_PAIR
+            const unsigned key=adc_rank_keys[unit][rank];
+#else
+            const unsigned key=rank;
+#endif
             channel.Channel=channels[first+key];channel.Rank=ranks[rank];
             channel.SamplingTime=SCAN_ADC_PHASE_PAIR && (unit==0U || rank!=0U)?
                 ADC_SAMPLETIME_32CYCLES_5:ADC_SAMPLETIME_64CYCLES_5;
