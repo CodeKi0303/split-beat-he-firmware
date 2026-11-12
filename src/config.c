@@ -6,11 +6,26 @@ uint16_t c77_crc16(const uint8_t *p,size_t n){uint16_t c=0xffff;while(n--){c^=(u
 uint32_t c77_crc32(const uint8_t *p,size_t n){uint32_t c=0xffffffff;while(n--){c^=*p++;for(unsigned j=0;j<8;j++)c=(c>>1)^((c&1)?0xedb88320u:0);}return ~c;}
 void c77_defaults(c77_config *cfg){
     memset(cfg,0,sizeof *cfg);
-    /* Provisional mirrored gaming layout; all positions are remappable. */
-    const uint8_t usage[20]={0x39,0x14,0x1a,0x08,0x15,0xe1,0x2c, 0x2a,0x18,0x0c,0x12,0x13,0xe5,0x2c, 0x1e,0x21,0x28,0x27,0x24,0x28};
+    /* Mapping-only baseline: default-bindings.json. A valid saved profile
+     * replaces these defaults at startup; calibration/RT defaults stay local. */
+    static const c77_binding bindings[C77_INPUTS]={
+        {.kind=1,.code=0x2b}, {.kind=1,.code=0x04},
+        {.kind=1,.code=0x16}, {.kind=1,.code=0x07},
+        {.kind=1,.code=0x09}, {.kind=1,.code=0xe1},
+        {.kind=1,.code=0x2c}, {.kind=1,.code=0x28},
+        {.kind=1,.code=0x33}, {.kind=1,.code=0x0f},
+        {.kind=1,.code=0x0e}, {.kind=1,.code=0x0d},
+        {.kind=1,.code=0xe5}, {.kind=1,.code=0,.modifiers=0x40},
+        {.kind=1,.code=0x3a}, {.kind=1,.code=0x3e},
+        {.kind=1,.code=0x29}, {.kind=1,.code=0x4f},
+        {.kind=1,.code=0x50}, {.kind=1,.code=0x28},
+        {.kind=1,.code=0x3a}, {.kind=1,.code=0x3b},
+        {.kind=1,.code=0x4b}, {.kind=1,.code=0x4e},
+        {.kind=2,.code=1}, {.kind=2,.code=0xffff},
+        {.kind=1,.code=0x52}, {.kind=1,.code=0x51}
+    };
     for(unsigned i=0;i<C77_HALL;i++)cfg->keys[i]=(c77_key_config){.actuation=200,.rt_press=100,.rt_release=100,.top_deadzone=30,.noise=2,.flags=3};
-    for(unsigned i=0;i<20;i++)cfg->bindings[i]=(c77_binding){.kind=1,.code=usage[i]};
-    for(unsigned i=20;i<28;i++)cfg->bindings[i]=(c77_binding){.kind=(uint8_t)((i%4<2)?2:4),.code=(uint16_t)((i%4<2)?((i%2)?0xffff:1):((i%2)?0xea:0xe9))};
+    memcpy(cfg->bindings,bindings,sizeof bindings);
 }
 static bool consumer_valid(uint16_t code){return code==0xb5||code==0xb6||code==0xb7||code==0xcd||code==0xe2||code==0xe9||code==0xea;}
 bool c77_config_valid(const c77_config *cfg){

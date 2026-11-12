@@ -6,6 +6,8 @@
 
 `python build.py --hardware c86 --role both --scan-hz 96000 --adc-async96`로 빌드하고, 같은 옵션으로 `python tools/verify_images.py`를 실행합니다. 출력 폴더에서 왼쪽 `c86-left-factory.hex`와 오른쪽 `c86-right-factory.hex`를 각각 사용합니다. Factory HEX에는 부팅부, 앱, 앱 메타데이터가 포함됩니다.
 
+v0.3.42의 새 보드 기본 매핑은 [default-bindings.json](default-bindings.json)과 같습니다. 유효한 저장 설정이 있으면 그 설정을 그대로 읽습니다. 새 보드에는 개인 보정값이 들어 있지 않으며 출력은 꺼진 상태에서 시작합니다. 앱 전용 USB 패키지에는 Factory HEX가 없으므로 최초 SWD 설치 파일과 구분해 사용하세요.
+
 | PCB SWD 핀 | 기능 |
 |---|---|
 | 1 | 3.3V 기준 전압 / VTref |

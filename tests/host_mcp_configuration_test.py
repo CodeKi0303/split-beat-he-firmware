@@ -341,6 +341,7 @@ class ConfigurationStudioToolsTests(unittest.TestCase):
         self.assertEqual(self.transport.generation, 0)
 
     def test_readonly_layout_catalog_work_without_device(self):
+        self.session.client = None
         self.session.require_client = lambda: (_ for _ in ()).throw(DeviceError("not connected"))
         self.assertEqual(self.tools["keyboard_layout"]()["input_count"], 28)
         catalog = self.tools["keyboard_binding_catalog"]()
@@ -373,8 +374,9 @@ class ConfigurationStudioToolsTests(unittest.TestCase):
         self.assertEqual(len(records), len(gui["INPUTS"]))
         for record, item in zip(records, gui["INPUTS"]):
             control = next(control for control in gui["CONTROLS"] if control["id"] == item["controlId"])
-            for field in ("side", "type", "label"):
+            for field in ("side", "type"):
                 self.assertEqual(record[field], item[field])
+            self.assertEqual(record["physical_label"], item["label"])
             self.assertEqual(record["input"], item["id"])
             self.assertEqual(record["source_ref"], control["sourceRef"])
             self.assertEqual(record["supports_rt"], item["type"] == "hall")

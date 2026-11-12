@@ -6,6 +6,7 @@ def main():
     ap=argparse.ArgumentParser();ap.add_argument('--firmware',action='store_true');ap.add_argument('--toolchain');ap.add_argument('--studio', type=Path);a=ap.parse_args()
     cmds=[
       [sys.executable,'tests/run_core_tests.py'],
+      [sys.executable,'tests/default_bindings_parity.py'],
       [sys.executable,'tests/run_board_tests.py'],
       [sys.executable,'tests/run_adc_tests.py'],
       [sys.executable,'tests/run_cc_tests.py'],
@@ -23,6 +24,7 @@ def main():
       [sys.executable,'-m','unittest','tests.host_key_timing_test'],
       [sys.executable,'-m','unittest','tests.host_retrigger_test'],
       [sys.executable,'-m','unittest','tests.host_hall_curve_test'],
+      [sys.executable,'-m','unittest','tests.host_mapping_defaults_test'],
       [sys.executable,'tests/host_mcp_e2e.py'],
       [sys.executable,'tests/host_core_bridge.py'],
       [sys.executable,'tests/hall_curve_parity.py'],

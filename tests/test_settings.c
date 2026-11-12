@@ -35,6 +35,15 @@ int main(void){
     b.keys[0].bottom_deadzone=125;b.keys[0].curve_id=RT_CURVE_OWLAB_TI_REFERENCE;
     assert(settings_store_save(&b,&gen,false));
     assert(settings_store_load(&migrated,&migrated_gen,&output)&&!output&&migrated_gen==gen&&migrated.keys[0].bottom_deadzone==125&&migrated.keys[0].curve_id==1);
+    /* New factory mappings must not replace any valid stored profile. */
+    b.bindings[0]=(c77_binding){.kind=1,.code=0x39};
+    b.bindings[13]=(c77_binding){.kind=1,.code=4,.modifiers=3};
+    assert(settings_store_save(&b,&gen,false));
+    c77_defaults(&migrated);assert(migrated.bindings[0].code==0x2b);
+    assert(settings_store_load(&migrated,&migrated_gen,&output)&&!output&&migrated_gen==gen);
+    uint8_t saved_blob[C77_CONFIG_BYTES],loaded_blob[C77_CONFIG_BYTES];
+    c77_config_encode(&b,saved_blob);c77_config_encode(&migrated,loaded_blob);
+    assert(!memcmp(saved_blob,loaded_blob,sizeof saved_blob));
     layout=0;assert(!settings_store_load(&a,NULL,NULL)&&settings_store_last_error()==SETTINGS_ERROR_LAYOUT);assert(!settings_store_save(&b,NULL,false));layout=1;ready=0;assert(!settings_store_save(&b,NULL,false)&&settings_store_last_error()==SETTINGS_ERROR_CACHE);
     puts("settings: CRC/commit,594 torn-write cases,sector rotation,layout guard PASS");return 0;
 }

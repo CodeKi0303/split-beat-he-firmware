@@ -10,7 +10,7 @@ from package_release import public_documents,copy_public_documents,prepare_outpu
 
 class PublicPackage(unittest.TestCase):
     def fixture(self,root):
-        names=['README.md','PROTOCOL.md','LICENSE','THIRD_PARTY.md','C86-FIRST-FLASH.md',
+        names=['README.md','PROTOCOL.md','LICENSE','THIRD_PARTY.md','default-bindings.json','C86-FIRST-FLASH.md',
                'docs/FIRMWARE-UPDATE.md','docs/HALL-CURVE.md','docs/HALL-FILTER.md',
                'docs/MCP-CONTROL.md','docs/RETRIGGER-BEFORE-RELEASE.md']
         for name in names:
@@ -24,11 +24,11 @@ class PublicPackage(unittest.TestCase):
             docs=public_documents(root,'c86',True);out=prepare_output(root,'candidate')
             copy_public_documents(docs,out)
             self.assertEqual((out/'START-HERE-C86.md').read_text(),'docs/FIRMWARE-UPDATE.md')
-            for name in ('README.md','PROTOCOL.md','LICENSE','THIRD_PARTY.md','docs/RETRIGGER-BEFORE-RELEASE.md'):
+            for name in ('README.md','PROTOCOL.md','LICENSE','THIRD_PARTY.md','default-bindings.json','docs/RETRIGGER-BEFORE-RELEASE.md'):
                 self.assertTrue((out/name).is_file())
             self.assertFalse((out/'VALIDATION.md').exists())
             self.assertFalse((out/'docs/private.json').exists())
-            self.assertEqual(len(list(out.rglob('*'))),12)  # 11 files plus docs directory
+            self.assertEqual(len(list(out.rglob('*'))),13)  # 12 files plus docs directory
 
     def test_missing_required_doc_fails_preflight(self):
         with tempfile.TemporaryDirectory() as td:
@@ -43,7 +43,7 @@ class PublicPackage(unittest.TestCase):
             docs=public_documents(root,'c86',False)
             start=next(source for source,dest in docs if dest.name=='START-HERE-C86.md')
             self.assertEqual(start,root/'C86-FIRST-FLASH.md')
-            self.assertEqual(len(public_documents(root,'c77',False)),4)
+            self.assertEqual(len(public_documents(root,'c77',False)),5)
 
     def test_previous_partial_output_preserved_not_repackaged(self):
         with tempfile.TemporaryDirectory() as td:

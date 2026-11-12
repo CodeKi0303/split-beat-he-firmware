@@ -4,7 +4,7 @@ import argparse,hashlib,json,shutil,subprocess,zipfile,uuid
 from source_evidence import verify_source
 from firmware_artifacts import DISPLAY_VERSION, validate_build_info
 ROOT=Path(__file__).resolve().parents[1]
-PUBLIC_ROOT_DOCS=('README.md','PROTOCOL.md','LICENSE','THIRD_PARTY.md')
+PUBLIC_ROOT_DOCS=('README.md','PROTOCOL.md','LICENSE','THIRD_PARTY.md','default-bindings.json')
 PUBLIC_C86_DOCS=('FIRMWARE-UPDATE.md','HALL-CURVE.md','HALL-FILTER.md',
                  'MCP-CONTROL.md','RETRIGGER-BEFORE-RELEASE.md')
 

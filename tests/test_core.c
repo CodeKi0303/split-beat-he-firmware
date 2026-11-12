@@ -117,7 +117,7 @@ static void test_reference_curve(void){
     a.curve_id=2;assert(!rt_key_configure(&ka,&a));
 }
 static void test_rt_and_report(void){
-    setup(true);enable();now+=63;fresh(2500);assert(e.pressed_mask&1);uint8_t keys[32];uint16_t consumer;c77_report(&e,keys,&consumer);assert(keys[0x39/8]&(1u<<(0x39%8)));assert(keys[0xe1/8]&(1u<<(0xe1%8)));
+    setup(true);enable();now+=63;fresh(2500);assert(e.pressed_mask&1);uint8_t keys[32];uint16_t consumer;c77_report(&e,keys,&consumer);assert(keys[0x2b/8]&(1u<<(0x2b%8)));assert(keys[0xe1/8]&(1u<<(0xe1%8)));
     now+=63;fresh(2800);assert(!(e.pressed_mask&1));now+=63;fresh(2550);assert(e.pressed_mask&1);
     now+=63;fresh(3000);assert(!(e.pressed_mask&1));
     now+=5001;c77_tick(&e,now);assert(!e.output);c77_report(&e,keys,&consumer);for(unsigned i=0;i<32;i++)assert(keys[i]==0);
@@ -162,7 +162,12 @@ static void test_calibration(void){
     p[1]=0;assert(command(5,p,2,r)==0);now+=5000001;c77_tick(&e,now);assert(!e.cal_state);
 }
 static void test_encoder_and_debounce(void){
-    setup(true);enable();c77_sample_t s=e.sample[0];s.sequence++;s.timestamp_us=now;s.encoders[0]=3;s.digital=1;c77_update(&e,0,&s,now);
+    setup(true);
+    /* Exercise scroll and consumer pulse behavior independently of the
+     * user's mapping baseline, which now maps these directions to keys. */
+    e.config.bindings[20]=(c77_binding){.kind=2,.code=1};
+    e.config.bindings[22]=(c77_binding){.kind=4,.code=0xe9};
+    enable();c77_sample_t s=e.sample[0];s.sequence++;s.timestamp_us=now;s.encoders[0]=3;s.digital=1;c77_update(&e,0,&s,now);
     int8_t wheel,pan;c77_mouse_peek(&e,&wheel,&pan);assert(wheel==3&&pan==0);c77_mouse_accepted(&e,wheel,pan);assert(!e.wheel_pending);
     assert(!(e.pressed_mask&(1u<<14)));now+=3001;s.sequence++;s.timestamp_us=now;c77_update(&e,0,&s,now);assert(e.pressed_mask&(1u<<14));
     s.sequence++;s.encoders[1]=1;c77_update(&e,0,&s,now);c77_tick(&e,now);uint8_t keys[32];uint16_t consumer;c77_report(&e,keys,&consumer);assert(consumer==0xe9);c77_consumer_acked(&e,now);now+=2100;fresh(3000);c77_report(&e,keys,&consumer);assert(!consumer);c77_consumer_acked(&e,now);assert(!e.pulse[2]);
