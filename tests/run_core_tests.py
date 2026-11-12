@@ -30,4 +30,6 @@ def main():
                        ['HARDWARE_REVISION=86','ROLE_LEFT=1','C86_ADC_DUAL64=1','C86_ADC_ASYNC64=1'])
     subprocess.run([str(exe)],check=True)
     compile_target('core_bridge',core+[ROOT/'tests/core_bridge.c'])
+    exe=compile_target('test_retrigger',core+[ROOT/'tests/test_retrigger.c'],['HARDWARE_REVISION=86'])
+    subprocess.run([str(exe)],check=True)
 if __name__=='__main__':main()

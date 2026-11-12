@@ -18,6 +18,9 @@ class Client:
         self.infos += 1
         self.calls.append((1, None))
         return dict(board_rev=86, generation=1, config_crc=123)
+    def get_config(self):
+        from host.simulator import defaults
+        return defaults()
     def status(self, side):
         self.calls.append((2, side))
         n = self.reads
@@ -104,14 +107,14 @@ class TimingTests(unittest.TestCase):
         self.assertLessEqual(r['fresh_snapshots'], 1001)
         self.assertNotIn('samples', r)
 
-    def test_status_only_does_not_change_live_output_even_readonly(self):
+    def test_config_and_status_reads_do_not_change_live_output_even_readonly(self):
         clock = Clock()
         transport = RecordingTransport()
         transport.enabled = True
         client = KeyboardClient(transport, write_enabled=False)
         capture_key_timing(client, 0, .2, 5, clock=clock.clock, delay=clock.delay)
         self.assertTrue(transport.enabled)
-        self.assertTrue(all(op in (1, 2) for op in transport.calls))
+        self.assertTrue(all(op in (1, 2, 3, 9) for op in transport.calls))
 
     def test_long_gap_and_age_invalidate_transition(self):
         clock = Clock()

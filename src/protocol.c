@@ -35,6 +35,7 @@ bool c77_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t now,ui
 #endif
 #if HARDWARE_REVISION == 86
         capabilities|=C77_CAP_KEY_CHORD;
+        capabilities|=C77_CAP_RETRIGGER;
 #endif
 #if SCAN_ADC_CAPTURE_DIAG
         capabilities|=ADC_TRACE_CAPABILITY;

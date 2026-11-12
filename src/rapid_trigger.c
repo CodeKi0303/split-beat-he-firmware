@@ -79,6 +79,7 @@ void rt_config_defaults(rt_config_t *config, uint16_t adc_released,
     config->curve_id = RT_CURVE_LINEAR;
     config->enabled = true;
     config->rapid_trigger_enabled = true;
+    config->retrigger_before_release = false;
 }
 
 void rt_key_reset(rt_key_t *key)
@@ -88,6 +89,8 @@ void rt_key_reset(rt_key_t *key)
     key->extreme = 0U;
     key->pressed = false;
     key->rapid_cycle = false;
+    key->retrigger_armed = false;
+    key->retrigger_valley = 0U;
     key->normalization_kind = RT_CACHE_NONE;
 }
 
@@ -104,10 +107,11 @@ bool rt_key_configure(rt_key_t *key, const rt_config_t *config)
 
 static rt_result_t process_travel(rt_key_t *key, uint16_t travel)
 {
-    rt_result_t result = {0U, false, false};
+    rt_result_t result = {0U, false, false, false};
     bool was_pressed;
     if (key == NULL || !key->valid) return result;
     was_pressed = key->pressed;
+    const uint16_t previous_travel = key->travel;
     key->travel = travel;
 
     if (!key->config.enabled || key->travel <= key->config.top_deadzone) {
@@ -143,6 +147,26 @@ static rt_result_t process_travel(rt_key_t *key, uint16_t travel)
         }
     }
 
+    /* Keep the ordinary release peak unchanged. This optional path adds an
+     * event, not a new physical pressed state or a changed release threshold. */
+    if (!was_pressed || !key->pressed || !key->config.rapid_trigger_enabled ||
+        !key->config.retrigger_before_release ||
+        (key->config.bottom_deadzone &&
+         travel >= RT_TRAVEL_MAX-key->config.bottom_deadzone)) {
+        key->retrigger_armed = false;
+    } else {
+        if (!key->retrigger_armed && travel < previous_travel) {
+            key->retrigger_armed = true;
+            key->retrigger_valley = travel;
+        }
+        if (key->retrigger_armed) {
+            if (travel < key->retrigger_valley) key->retrigger_valley = travel;
+            if ((uint16_t)(travel-key->retrigger_valley) >= key->config.rt_press) {
+                result.retriggered = true;
+                key->retrigger_armed = false;
+            }
+        }
+    }
     result.travel = key->travel;
     result.pressed = key->pressed;
     result.changed = key->pressed != was_pressed;
@@ -151,7 +175,7 @@ static rt_result_t process_travel(rt_key_t *key, uint16_t travel)
 
 rt_result_t rt_key_process(rt_key_t *key, uint16_t adc_raw)
 {
-    const rt_result_t invalid={0U,false,false};
+    const rt_result_t invalid={0U,false,false,false};
     if(key==NULL || !key->valid) return invalid;
     CPU_PROFILE_RT_CALL();
     if(key->normalization_kind!=RT_CACHE_WHOLE || key->normalization_input!=adc_raw) {
@@ -166,7 +190,7 @@ rt_result_t rt_key_process(rt_key_t *key, uint16_t adc_raw)
 
 rt_result_t rt_key_process_q5(rt_key_t *key, uint32_t adc_q5)
 {
-    rt_result_t invalid={0U,false,false};
+    rt_result_t invalid={0U,false,false,false};
     if(key==NULL || !key->valid) return invalid;
     if(adc_q5>RT_ADC_Q5_MAX) {
         invalid.changed=key->pressed;

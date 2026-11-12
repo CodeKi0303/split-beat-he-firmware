@@ -26,6 +26,7 @@ typedef struct {
     uint16_t curve_id;
     bool enabled;
     bool rapid_trigger_enabled;
+    bool retrigger_before_release;
 } rt_config_t;
 
 typedef struct {
@@ -35,6 +36,8 @@ typedef struct {
     bool pressed;
     bool rapid_cycle;
     bool valid;
+    uint16_t retrigger_valley;
+    bool retrigger_armed;
     /* Private normalization cache, never serialized. Configure/reset invalidate
      * it; a cache hit still runs the complete RT state machine. */
     uint8_t normalization_kind;
@@ -46,6 +49,8 @@ typedef struct {
     uint16_t travel;
     bool pressed;
     bool changed;
+    /* A synthetic repeat request; physical pressed and changed stay unchanged. */
+    bool retriggered;
 } rt_result_t;
 
 /* Defaults: initial actuation 200; RT press/release 50; top deadzone 20;
@@ -86,7 +91,13 @@ void rt_key_reset(rt_key_t *key);
  * sample value, not a remapping of the deadzone or a measurement-accuracy claim.
  * With RT off, press at/above actuation and release below actuation.
  * Disabled keys still report normalized travel, but are always released.
- * changed describes only this call's pressed-state transition. */
+ * changed describes only this call's pressed-state transition.
+ * Optional retrigger_before_release (default false): while held outside the
+ * bottom deadzone, an upward movement starts a valley. A subsequent downward
+ * movement >=rt_press emits retriggered without changing pressed/changed or
+ * the normal release peak. Each event clears the valley; monotonic downward
+ * motion cannot emit repeatedly. Real release, RT off, reset, and either
+ * deadzone clear the valley. Consumer code must serialize actual HID edges. */
 rt_result_t rt_key_process(rt_key_t *key, uint16_t adc_raw);
 
 /* Private fractional acquisition path. adc_q5 is in the same ADC endpoint

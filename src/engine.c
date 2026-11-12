@@ -3,7 +3,7 @@
 #include <string.h>
 static void install(c77_engine *e,unsigned i){
     const c77_key_config *k=&e->config.keys[i];
-    rt_config_t c={.adc_released=k->released,.adc_pressed=k->pressed,.actuation=k->actuation,.rt_press=k->rt_press,.rt_release=k->rt_release,.top_deadzone=k->top_deadzone,.bottom_deadzone=k->bottom_deadzone,.curve_id=k->curve_id,.enabled=(k->flags&5)==5,.rapid_trigger_enabled=(k->flags&2)!=0};
+    rt_config_t c={.adc_released=k->released,.adc_pressed=k->pressed,.actuation=k->actuation,.rt_press=k->rt_press,.rt_release=k->rt_release,.top_deadzone=k->top_deadzone,.bottom_deadzone=k->bottom_deadzone,.curve_id=k->curve_id,.enabled=(k->flags&5)==5,.rapid_trigger_enabled=(k->flags&2)!=0,.retrigger_before_release=(k->flags&C77_KEY_RETRIGGER)!=0};
     (void)rt_key_configure(&e->keys[i],&c);
 }
 void c77_engine_init(c77_engine *e,const c77_config *cfg,uint32_t generation,bool stored){
@@ -13,6 +13,7 @@ void c77_engine_init(c77_engine *e,const c77_config *cfg,uint32_t generation,boo
 void c77_disable(c77_engine *e){
     e->output=0;e->pressed_mask=0;e->wheel_pending=e->pan_pending=0;
     memset(e->pending,0,sizeof e->pending);memset(e->pulse,0,sizeof e->pulse);
+    memset(e->retrigger,0,sizeof e->retrigger);e->retrigger_mask=0;++e->retrigger_epoch;
     for(unsigned i=0;i<C77_HALL;i++)rt_key_reset(&e->keys[i]);
 }
 #if SCAN_ADC_ASYNC
@@ -101,6 +102,16 @@ static inline bool update_hall(c77_engine *e,unsigned side,const c77_sample_t *s
         }
         e->travel[i]=result.travel;
         if(result.pressed)e->pressed_mask|=1u<<i;else e->pressed_mask&=~(1u<<i);
+        if(!result.pressed&&(e->retrigger_mask&(1u<<i))){e->retrigger[i]=0;e->retrigger_mask&=(uint16_t)~(1u<<i);}
+        if(result.retriggered&&e->output&&!first){
+            const c77_binding *b=&e->config.bindings[i];
+            if(b->kind==2||b->kind==3)
+                add_scroll(e,b->kind==2?&e->wheel_pending:&e->pan_pending,(int16_t)b->code);
+            else if(b->kind){
+                if(e->retrigger[i])e->pulse_drops++;
+                else {e->retrigger[i]=1;e->retrigger_mask|=(uint16_t)(1u<<i);e->retrigger_tag[i]=++e->retrigger_epoch;e->retrigger_since[i]=s->timestamp_us;}
+            }
+        }
     }
     return valid;
 }
@@ -214,6 +225,10 @@ void c77_tick(c77_engine *e,uint32_t now){
     }
     if((e->cal_state==1||e->cal_state==3)&&(uint32_t)(now-e->cal_started)>5000000u){e->cal_state=0;e->cal_key=255;e->errors++;}
     if(!e->output)return;
+    if(e->retrigger_mask)for(unsigned i=0;i<C77_HALL;i++)if(e->retrigger[i]&&
+        (!(e->pressed_mask&(1u<<i))||(uint32_t)(now-e->retrigger_since[i])>=100000u)){
+        e->retrigger[i]=0;e->retrigger_mask&=(uint16_t)~(1u<<i);++e->retrigger_epoch;e->pulse_drops++;
+    }
     for(unsigned i=0;i<8;i++){
         if(!e->pulse[i]&&e->pending[i]){e->pending[i]--;e->pulse[i]=1;}
         if(e->pulse[i]==2&&(uint32_t)(now-e->pulse_started[i])>=2000u)e->pulse[i]=3;
@@ -248,7 +263,8 @@ void c77_report(const c77_engine *e,uint8_t keyboard[32],uint16_t *consumer){
     memset(keyboard,0,32);*consumer=0;if(!e->output)return;
     /* Encoder consumer pulses have priority over held consumer buttons. */
     for(unsigned i=0;i<8;i++)if(e->pulse[i]==1||e->pulse[i]==2)bind_report(&e->config.bindings[20+i],keyboard,consumer);
-    for(unsigned i=0;i<20;i++)if(e->pressed_mask&(1u<<i))bind_report(&e->config.bindings[i],keyboard,consumer);
+    for(unsigned i=0;i<20;i++)if((e->pressed_mask&(1u<<i))&&
+        (i>=C77_HALL||e->retrigger[i]!=2))bind_report(&e->config.bindings[i],keyboard,consumer);
 }
 void c77_keyboard_report_acked(c77_engine *e,const uint8_t actual[32],uint32_t now){
     if(!actual)return;
@@ -293,7 +309,8 @@ uint8_t c77_mouse_buttons(const c77_engine *e){
     uint8_t buttons=0;if(!e->output)return 0;
     for(unsigned i=0;i<28;i++){
         const c77_binding *b=&e->config.bindings[i];
-        bool active=i<20?(e->pressed_mask&(1u<<i))!=0:(e->pulse[i-20]==1||e->pulse[i-20]==2);
+        bool active=i<20?((e->pressed_mask&(1u<<i))!=0&&
+            (i>=C77_HALL||e->retrigger[i]!=2)):(e->pulse[i-20]==1||e->pulse[i-20]==2);
         if(active&&b->kind==5)buttons|=(uint8_t)(1u<<(b->code-1));
     }return buttons;
 }
@@ -304,6 +321,51 @@ void c77_mouse_acked(c77_engine *e,uint8_t buttons,uint32_t now){
         if(e->pulse[i]==1&&(buttons&bit)){e->pulse[i]=2;e->pulse_started[i]=now;}
         else if(e->pulse[i]==3&&!(buttons&bit))e->pulse[i]=0;
     }
+}
+static bool binding_active(const c77_engine *e,unsigned i){
+    return i<20?((e->pressed_mask&(1u<<i))!=0&&
+        (i>=C77_HALL||e->retrigger[i]!=2)):(e->pulse[i-20]==1||e->pulse[i-20]==2);
+}
+void c77_retrigger_report_acked(c77_engine *e,unsigned type,const uint8_t *actual,uint32_t tag,uint32_t now){
+    if(!e->retrigger_mask||!e->output||!actual||!tag)return;
+    for(unsigned i=0;i<C77_HALL;i++){
+        if(!e->retrigger[i]||!(e->pressed_mask&(1u<<i))||
+           (int32_t)(tag-e->retrigger_tag[i])<0)continue;
+        const c77_binding *b=&e->config.bindings[i];
+        const unsigned binding_type=is_keyboard_binding(b)?0U:b->kind==5?1U:b->kind==4?2U:3U;
+        if(type!=binding_type)continue;
+        bool present=false,absent=false,unique=false;
+        if(type==0){
+            uint8_t own[32]={0},other[32]={0};uint16_t unused=0;
+            bind_report(b,own,&unused);
+            for(unsigned j=0;j<C77_INPUTS;j++)if(j!=i&&binding_active(e,j))
+                bind_report(&e->config.bindings[j],other,&unused);
+            present=true;absent=true;
+            for(unsigned j=0;j<32;j++){
+                uint8_t exclusive=(uint8_t)(own[j]&~other[j]);
+                if(exclusive)unique=true;
+                if((actual[j]&own[j])!=own[j])present=false;
+                if(actual[j]&exclusive)absent=false;
+            }
+        }else{
+            unique=true;
+            for(unsigned j=0;j<C77_INPUTS;j++)if(j!=i&&binding_active(e,j)&&
+                e->config.bindings[j].kind==b->kind&&e->config.bindings[j].code==b->code)
+                unique=false;
+            if(type==1)present=(actual[0]&(1u<<(b->code-1)))!=0;
+            else present=(uint16_t)(actual[0]|((uint16_t)actual[1]<<8))==b->code;
+            absent=!present;
+        }
+        /* HID merges identical usages. Never release another physical source
+         * in order to manufacture a repeat. Shared chord modifiers remain held. */
+        if(!unique){e->retrigger[i]=0;e->retrigger_mask&=(uint16_t)~(1u<<i);++e->retrigger_epoch;e->pulse_drops++;continue;}
+        if((e->retrigger[i]==2&&absent)||(e->retrigger[i]!=2&&present)){
+            if(e->retrigger[i]==3){e->retrigger[i]=0;e->retrigger_mask&=(uint16_t)~(1u<<i);}
+            else ++e->retrigger[i];
+            e->retrigger_tag[i]=++e->retrigger_epoch;
+        }
+    }
+    (void)now;
 }
 /* Reinstall after mutation without losing diagnostics. */
 void c77_reconfigure(c77_engine *e){c77_disable(e);e->restore_output_pending=false;for(unsigned i=0;i<C77_HALL;i++)install(e,i);e->dirty=1;}

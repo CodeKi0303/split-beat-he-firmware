@@ -18,7 +18,7 @@ bool c77_config_valid(const c77_config *cfg){
     for(unsigned i=0;i<C77_HALL;i++){
         const c77_key_config *k=&cfg->keys[i];
         int span=(int)k->pressed-(int)k->released;if(span<0)span=-span;
-        if(k->flags>7||k->released>4095||k->pressed>4095||k->actuation>1000||k->actuation<=k->top_deadzone||k->bottom_deadzone>1000-k->actuation||k->curve_id>RT_CURVE_OWLAB_TI_REFERENCE||!k->rt_press||k->rt_press>1000||!k->rt_release||k->rt_release>1000||k->noise>100||((k->flags&4)&&span<128))return false;
+        if(k->flags>(HARDWARE_REVISION==86?15:7)||k->released>4095||k->pressed>4095||k->actuation>1000||k->actuation<=k->top_deadzone||k->bottom_deadzone>1000-k->actuation||k->curve_id>RT_CURVE_OWLAB_TI_REFERENCE||!k->rt_press||k->rt_press>1000||!k->rt_release||k->rt_release>1000||k->noise>100||((k->flags&4)&&span<128))return false;
     }
     for(unsigned i=0;i<C77_INPUTS;i++){
         const c77_binding *b=&cfg->bindings[i];

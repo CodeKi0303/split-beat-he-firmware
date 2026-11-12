@@ -102,9 +102,14 @@ int main(void){
         usb_device_poll();
         /* A queued/published report is not an ACK. Only consume encoder
          * pulses actually represented in a completed USB IN report. */
-        uint8_t completed[32];uint32_t completed_count;
-        if(usb_keyboard_take_completed(completed,&completed_count))
+        uint8_t completed[32];uint32_t completed_count,completed_tag;
+        if(usb_keyboard_take_completed_tagged(completed,&completed_count,&completed_tag)){
             c77_keyboard_report_acked(&engine,completed,now);
+            c77_retrigger_report_acked(&engine,0,completed,completed_tag,now);
+        }
+        if(engine.retrigger_mask)for(unsigned auxiliary=1;auxiliary<=2;auxiliary++)
+            if(usb_aux_take_completed(auxiliary,completed,&completed_tag))
+                c77_retrigger_report_acked(&engine,auxiliary,completed,completed_tag,now);
 #if HARDWARE_REVISION==86
         fw_runtime_poll();
 #if SCAN_ADC_PHASE_PAIR
@@ -175,16 +180,16 @@ int main(void){
             uint8_t keys[32];uint16_t consumer;c77_report(&engine,keys,&consumer);
             /* Host IN tokens determine cadence. Publish only the newest
              * state; DataIn immediately re-arms without software125us drift. */
-            (void)usb_keyboard_publish(keys);
+            (void)usb_keyboard_publish_tagged(keys,engine.retrigger_epoch);
         }
         if((uint32_t)(now-last_aux)>=1000u){
             uint8_t keys[32];uint16_t consumer;int8_t wheel,pan;c77_report(&engine,keys,&consumer);
-            if(usb_consumer_send(consumer))c77_consumer_acked(&engine,now);
+            if(usb_consumer_send_tagged(consumer,engine.retrigger_epoch))c77_consumer_acked(&engine,now);
             c77_mouse_peek(&engine,&wheel,&pan);
             uint8_t buttons=c77_mouse_buttons(&engine);
             /* Send neutral button state too: disabling output, stale sources,
              * and a release must never leave a mouse button held on the host. */
-            if(usb_mouse_send(buttons,wheel,pan)){
+            if(usb_mouse_send_tagged(buttons,wheel,pan,engine.retrigger_epoch)){
                 c77_mouse_accepted(&engine,wheel,pan);c77_mouse_acked(&engine,buttons,now);
             }
             last_aux=now;

@@ -305,10 +305,48 @@ static void stream_test(void)
     fake_ipsr=0;
     usb_device_stop();assert(!keyboard_stream && !usb_configured());
 }
+static void tagged_completion_test(void)
+{
+    usb_device_init();usb_device_poll();complete_all();
+    uint8_t a[32]={1},b[32]={2},done[32];uint32_t count_done,tag;
+    /* Completing one transfer returns its tag, not the latest overwritten
+     * mailbox tag. That distinction prevents false release-phase ACKs. */
+    assert(usb_keyboard_publish_tagged(a,10));
+    assert(usb_keyboard_publish_tagged(b,11));
+    complete_keyboard_irq();
+    assert(usb_keyboard_take_completed_tagged(done,&count_done,&tag)&&done[0]==1&&tag==10);
+    complete_keyboard_irq();
+    assert(usb_keyboard_take_completed_tagged(done,&count_done,&tag)&&done[0]==2&&tag==11);
+    /* An old in-flight phase remains old even if several new publications occur. */
+    assert(usb_keyboard_publish_tagged(a,12));assert(usb_keyboard_publish_tagged(b,13));
+    complete_keyboard_irq();
+    assert(usb_keyboard_take_completed_tagged(done,&count_done,&tag)&&tag==11);
+    complete_keyboard_irq();
+    assert(usb_keyboard_take_completed_tagged(done,&count_done,&tag)&&tag==13);
+    fake_tick+=3;complete_keyboard_irq();complete_keyboard_irq();
+    assert(usb_keyboard_take_completed_tagged(done,&count_done,&tag)&&tag==0&&done[0]==0);
+    assert(usb_mouse_send_tagged(1,1,-1,20));
+    assert(!usb_mouse_send_tagged(0,0,0,21));
+    assert(c77_hid_class.DataIn(&c77_usb_device,2)==USBD_OK);
+    assert(usb_aux_take_completed(1,done,&tag)&&done[0]==1&&done[3]==1&&tag==20);
+    assert(!usb_aux_take_completed(1,done,&tag));
+    assert(usb_mouse_send_tagged(0,0,0,21));
+    assert(c77_hid_class.DataIn(&c77_usb_device,2)==USBD_OK);
+    assert(usb_aux_take_completed(1,done,&tag)&&done[0]==0&&tag==21);
+    assert(usb_consumer_send_tagged(0xe9,30));
+    assert(!usb_consumer_send_tagged(0,31));
+    assert(c77_hid_class.DataIn(&c77_usb_device,3)==USBD_OK);
+    assert(usb_aux_take_completed(2,done,&tag)&&done[0]==0xe9&&tag==30);
+    assert(usb_consumer_send_tagged(0,31));
+    usb_device_bus_event();complete_all();
+    assert(!usb_aux_take_completed(2,done,&tag));
+    assert(!usb_keyboard_take_completed_tagged(done,&count_done,&tag));
+    usb_device_stop();
+}
 int main(void)
 {
     usb_device_init(); assert(usb_configured() && usb_speed()==2);
-    descriptors_test(); control_test(); queue_test(); send_test();stream_test();
+    descriptors_test(); control_test(); queue_test(); send_test();stream_test();tagged_completion_test();
     puts("USB descriptors, control validation, queue, lifecycle, immutable TX and completion-paced latest keyboard stream: PASS");
     return 0;
 }

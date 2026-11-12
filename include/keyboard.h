@@ -7,6 +7,7 @@ enum { C77_HALL=14, C77_INPUTS=28, C77_CONFIG_BYTES=476 };
 enum { C77_OK=0,C77_BAD_COMMAND,C77_BAD_PACKET,C77_BAD_INDEX,C77_BAD_CONFIG,C77_BUSY,C77_CAL_INVALID,C77_NOT_READY,C77_STORAGE_ERROR };
 enum { C77_BINDING_KEY_CHORD=6, C77_CAP_KEY_CHORD=0x2000 };
 enum { C77_CAP_SAVE_OUTPUT=0x4000 };
+enum { C77_KEY_RETRIGGER=0x08, C77_CAP_RETRIGGER=0x40000 };
 enum { C77_CAP_ADC_TUNING=0x8000,C77_CAP_ADC_PAIR=0x10000,C77_CAP_ADC_PAIR_READ=0x20000 };
 typedef struct { uint16_t released,pressed,actuation,rt_press,rt_release,top_deadzone,noise,bottom_deadzone,curve_id; uint8_t flags; } c77_key_config;
 /* Chords pack the first two usages into code, low byte first. A zero
@@ -39,6 +40,11 @@ typedef struct {
     uint32_t pulse_started[8];
     int32_t wheel_pending,pan_pending;
     uint32_t pulse_drops;
+    /* One outstanding event/key: 1 await held ACK, 2 release, 3 repress.
+     * Epoch tags bind ACKs to actual published phases, never mailbox intent. */
+    uint8_t retrigger[C77_HALL];
+    uint16_t retrigger_mask;
+    uint32_t retrigger_epoch, retrigger_since[C77_HALL], retrigger_tag[C77_HALL];
 } c77_engine;
 uint16_t c77_crc16(const uint8_t *p,size_t n);
 uint32_t c77_crc32(const uint8_t *p,size_t n);
@@ -65,6 +71,9 @@ void c77_mouse_peek(const c77_engine *e,int8_t *wheel,int8_t *pan);
 uint8_t c77_mouse_buttons(const c77_engine *e);
 void c77_mouse_accepted(c77_engine *e,int8_t wheel,int8_t pan);
 void c77_mouse_acked(c77_engine *e,uint8_t buttons,uint32_t now);
+/* type 0 keyboard (32 bytes), 1 mouse (buttons byte), 2 consumer (LE u16).
+ * Called ONLY with a completed USB transfer and the original snapshot tag. */
+void c77_retrigger_report_acked(c77_engine *e,unsigned type,const uint8_t *actual,uint32_t tag,uint32_t now);
 /* Returns false for an unrecognizable packet; otherwise produces one reply. */
 bool c77_command(c77_engine *e,const uint8_t request[64],uint8_t reply[64],uint32_t now,uint8_t usb_speed,uint16_t flash_kib);
 #endif

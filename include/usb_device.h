@@ -13,9 +13,11 @@ bool usb_keyboard_send(const uint8_t report[32]);
 /* Main publishes a latest-state mailbox. EP1 completion rearms from that copy,
  * letting the USB host pace reports; publication is NOT a delivery ACK. */
 bool usb_keyboard_publish(const uint8_t report[32]);
+bool usb_keyboard_publish_tagged(const uint8_t report[32],uint32_t tag);
 /* Latest actual EP1 completion, copied atomically. Call before input/pulse
  * state advances; acknowledge only usages represented by this report. */
 bool usb_keyboard_take_completed(uint8_t report[32],uint32_t *completion_count);
+bool usb_keyboard_take_completed_tagged(uint8_t report[32],uint32_t *completion_count,uint32_t *tag);
 typedef struct {
     /* Monotonic modulo-2^32 since boot, including neutral reports. Counts are
      * actual DataIn completions, not USB microframes or successful publish calls. */
@@ -24,6 +26,10 @@ typedef struct {
 void usb_keyboard_stats(usb_keyboard_stats_t *out);
 bool usb_mouse_send(uint8_t buttons,int8_t wheel,int8_t pan);
 bool usb_consumer_send(uint16_t usage);
+bool usb_mouse_send_tagged(uint8_t buttons,int8_t wheel,int8_t pan,uint32_t tag);
+bool usb_consumer_send_tagged(uint16_t usage,uint32_t tag);
+/* index 1 mouse (5 bytes), 2 consumer (2 bytes); completed snapshot only. */
+bool usb_aux_take_completed(unsigned index,uint8_t report[5],uint32_t *tag);
 bool usb_vendor_read(uint8_t report[64]);
 bool usb_vendor_send(const uint8_t report[64]);
 bool usb_vendor_idle(void);

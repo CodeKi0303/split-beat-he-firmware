@@ -69,6 +69,10 @@ static volatile uint32_t dropped, completed, session;
 /* A published state is distinct from the HAL-owned in-flight tx[0]. Only the
  * completion IRQ may recycle tx[0]; main never overwrites an active transfer. */
 static uint8_t keyboard_latest[32],keyboard_completed_report[32];
+static uint32_t keyboard_latest_tag,keyboard_completed_tag,tx_tags[3];
+static uint8_t aux_completed_report[2][5];
+static uint32_t aux_completed_tag[2];
+static volatile uint8_t aux_completion_pending;
 static volatile uint8_t keyboard_stream,keyboard_completion_pending,keyboard_stale;
 static volatile uint32_t keyboard_published_at,keyboard_published;
 static volatile uint32_t keyboard_submit_failures,keyboard_stale_neutralizations;
@@ -101,6 +105,8 @@ void usb_device_bus_event(void)
     memset(keyboard_completed_report,0,sizeof keyboard_completed_report);
     keyboard_stream=keyboard_completion_pending=keyboard_stale=0;
     keyboard_published_at=0;
+    keyboard_latest_tag=keyboard_completed_tag=0;aux_completion_pending=0;
+    memset(tx_tags,0,sizeof tx_tags);
     neutral_mask = 7U;
 }
 void usb_device_setup_begin(void) { control_pending = 0; }
@@ -274,6 +280,12 @@ static uint8_t data_in(USBD_HandleTypeDef *dev, uint8_t ep)
         memcpy(keyboard_completed_report,tx[0],32);
         ++completed;
         keyboard_completion_pending=1;
+        keyboard_completed_tag=tx_tags[0];
+    }else if(ep==2||ep==3){
+        unsigned i=ep-2;
+        memcpy(aux_completed_report[i],tx[ep-1],ep==2?5U:2U);
+        aux_completed_tag[i]=tx_tags[ep-1];
+        aux_completion_pending|=(uint8_t)(1U<<i);
     }
     busy[ep - 1] = 0;
     /* ST HAL clears XFRC and disables the old FIFO-empty mask before invoking
@@ -305,6 +317,7 @@ static bool send_locked(uint8_t index, const uint8_t *data, uint16_t size)
 {
     if (!usb_configured() || busy[index]) return false;
     memcpy(tx[index], data, size);
+    if(index<3)tx_tags[index]=0;
     busy[index] = 1;
     if (USBD_LL_Transmit(&c77_usb_device, 0x81U + index, tx[index], size) != USBD_OK) {
         busy[index] = 0;
@@ -327,7 +340,9 @@ static bool keyboard_arm_locked(void)
     keyboard_stale=(uint8_t)stale;
     /* If main stalls while interrupts continue, never repeat held keys
      * indefinitely. New publication is needed to leave neutral fallback. */
-    return send_locked(0,stale?zero:keyboard_latest,32);
+    bool sent=send_locked(0,stale?zero:keyboard_latest,32);
+    if(sent)tx_tags[0]=stale?0:keyboard_latest_tag;
+    return sent;
 }
 static bool send(uint8_t index, const uint8_t *data, uint16_t size)
 {
@@ -374,12 +389,15 @@ void usb_device_poll(void)
 bool usb_keyboard_send(const uint8_t report[32])
 { return !keyboard_stream && send(0, report, 32); }
 bool usb_keyboard_publish(const uint8_t report[32])
+{ return usb_keyboard_publish_tagged(report,0); }
+bool usb_keyboard_publish_tagged(const uint8_t report[32],uint32_t tag)
 {
     if(!report || __get_IPSR()!=0) return false;
     uint32_t prior=lock();
     bool accepted=usb_configured() && !(neutral_mask&1U);
     if(accepted) {
         memcpy(keyboard_latest,report,32);
+        keyboard_latest_tag=tag;
         keyboard_published_at=HAL_GetTick();keyboard_stale=0;
         keyboard_stream=1;++keyboard_published;
         (void)keyboard_arm_locked();
@@ -388,13 +406,16 @@ bool usb_keyboard_publish(const uint8_t report[32])
     return accepted;
 }
 bool usb_keyboard_take_completed(uint8_t report[32],uint32_t *completion_count)
+{ uint32_t tag;return usb_keyboard_take_completed_tagged(report,completion_count,&tag); }
+bool usb_keyboard_take_completed_tagged(uint8_t report[32],uint32_t *completion_count,uint32_t *tag)
 {
-    if(!report || !completion_count || __get_IPSR()!=0) return false;
+    if(!report || !completion_count || !tag || __get_IPSR()!=0) return false;
     uint32_t prior=lock();
     bool available=keyboard_completion_pending!=0;
     if(available) {
         memcpy(report,keyboard_completed_report,32);
         *completion_count=completed;
+        *tag=keyboard_completed_tag;
         keyboard_completion_pending=0;
     }
     unlock(prior);
@@ -413,6 +434,30 @@ bool usb_mouse_send(uint8_t buttons, int8_t wheel, int8_t pan)
 { const uint8_t report[MOUSE_REPORT_SIZE] = {(uint8_t)(buttons&31u),0,0,(uint8_t)wheel,(uint8_t)pan}; return send(1, report, sizeof report); }
 bool usb_consumer_send(uint16_t usage)
 { const uint8_t report[] = {(uint8_t)usage,(uint8_t)(usage >> 8)}; return send(2, report, 2); }
+static bool send_tagged(uint8_t index,const uint8_t *report,uint16_t size,uint32_t tag){
+    if(__get_IPSR()!=0)return false;
+    uint32_t prior=lock();bool result=false;
+    if(!(neutral_mask&(1U<<index))){
+        result=send_locked(index,report,size);
+        if(result)tx_tags[index]=tag;
+    }
+    unlock(prior);return result;
+}
+bool usb_mouse_send_tagged(uint8_t buttons,int8_t wheel,int8_t pan,uint32_t tag){
+    const uint8_t report[MOUSE_REPORT_SIZE]={(uint8_t)(buttons&31u),0,0,(uint8_t)wheel,(uint8_t)pan};
+    return send_tagged(1,report,sizeof report,tag);
+}
+bool usb_consumer_send_tagged(uint16_t usage,uint32_t tag){
+    const uint8_t report[2]={(uint8_t)usage,(uint8_t)(usage>>8)};
+    return send_tagged(2,report,2,tag);
+}
+bool usb_aux_take_completed(unsigned index,uint8_t report[5],uint32_t *tag){
+    if(index<1||index>2||!report||!tag||__get_IPSR()!=0)return false;
+    uint32_t prior=lock();unsigned i=index-1;uint8_t bit=(uint8_t)(1U<<i);
+    bool available=(aux_completion_pending&bit)!=0;
+    if(available){memcpy(report,aux_completed_report[i],index==1?5U:2U);*tag=aux_completed_tag[i];aux_completion_pending&=(uint8_t)~bit;}
+    unlock(prior);return available;
+}
 bool usb_vendor_send(const uint8_t report[64]) { return send(3, report, 64); }
 bool usb_vendor_read(uint8_t report[64])
 {

@@ -59,7 +59,51 @@ enable. Saving with output off writes a record readable by older firmware.
 Older firmware skips records with byte 16 set. A C86 firmware update initiated
 from a supporting app suppresses auto-enable on its first application boot.
 
-Key record22bytes: u8 key;u8 flags(bit0enabled,bit1RT,bit2calibrated);u16 released;u16 pressed;u16 actuation;u16 rt_press;u16 rt_release;u16 top_deadzone;u16 noise_deadband;u16 bottom_deadzone;u16 curve_id;u16 reserved=0. ADC0..4095. Travel0..1000 is a normalized coordinate, not millimetres: curve0 reports normalized ADC range; curve1 reports an approximate normalized distance from the reference curve. top_deadzone<actuation<=1000; 0<=bottom_deadzone<=1000-actuation; RT distances1..1000; noise0..100; curve_id0..1. Uncalibrated equal endpoints allowed, calibrated span>=128.
+Key record22bytes: u8 key;u8 flags(bit0enabled,bit1RT,bit2calibrated,bit3retrigger-before-release);u16 released;u16 pressed;u16 actuation;u16 rt_press;u16 rt_release;u16 top_deadzone;u16 noise_deadband;u16 bottom_deadzone;u16 curve_id;u16 reserved=0. ADC0..4095. Travel0..1000 is a normalized coordinate, not millimetres: curve0 reports normalized ADC range; curve1 reports an approximate normalized distance from the reference curve. top_deadzone<actuation<=1000; 0<=bottom_deadzone<=1000-actuation; RT distances1..1000; noise0..100; curve_id0..1. Uncalibrated equal endpoints allowed, calibrated span>=128.
+
+### Optional retrigger before release (C86 v0.3.37)
+
+INFO capability `0x40000` permits key flags bit3 (`0x08`). It defaults OFF,
+requires a supporting client/firmware before writing or importing it, and is
+preserved but ignored while RT is disabled. C77/C85 and older firmware reject
+this flag. Settings remain 476 bytes, with unchanged ADC endpoints, curves,
+deadbands, bindings and journal format. Explicitly clear the bit and save
+before a downgrade; otherwise an older journal generation may be restored.
+
+Ordinary actuation and release thresholds keep their existing meaning. While
+a Hall key remains pressed, upward motion starts a trough; downward travel
+of at least `rt_press` from that trough requests another input even when the
+prior upward movement never reached `rt_release`. Example in a scaled travel
+coordinate: deepest 2.0 -> 1.3 -> 1.9 requests a repeat for press 0.6/release
+0.8. The original release peak is preserved. After each request, trough
+tracking resets until another upward movement, so continuous downward motion
+cannot repeat. Normal release wins. Top deadzone releases/resets; bottom
+deadzone holds and resets tracking, preventing repeats within that zone.
+
+`STATUS.pressed_mask` and `rt_result.pressed` remain physical RT states.
+`rt_result.retriggered` is a separate one-call event. For keyboard usages,
+chords/modifiers, mouse buttons and consumer usages, output waits for an
+actually completed held report, then suppresses only this source until an
+actually completed released report, then restores this source only if still
+physically pressed and waits for its completed pressed report. Snapshot tags
+travel with immutable in-flight USB buffers; stale completions, mailbox
+publication and send acceptance cannot advance those phases. This necessarily
+spans distinct host polls; it is not a zero-duration release/press or a new
+guarantee about game input sampling. Unrelated sources continue reporting.
+Duplicate HID usages remain union-held. A wholly duplicated binding cannot
+produce a visible repeat and is discarded; shared chord modifiers stay held
+while unique chord usages can repeat. Consumer selection priority is unchanged.
+
+Only one event per Hall key may be in flight; additional events coalesce and
+increment `pulse_drops`. Pending phases time out after 100 ms and are canceled
+on actual release, reconfiguration, output-off, stale input or USB session
+reset. Cancellation never resurrects a released physical source. Relative
+wheel/pan mappings instead enqueue one extra bounded delta per retrigger,
+like an ordinary press edge; they do not have a held/released HID state.
+Unbound keys do nothing. The default-OFF path uses the same RT decisions,
+scan rate and report intervals as before. Host sensor snapshots cannot prove
+that every short synthetic USB edge was observed by a game; actual device
+and game tests remain required. No audio timing or game offset is optimized.
 
 Curve1 uses the public NeonHE Tab60 HE `OW Ti` reference (downloaded2026-11-07), not the provisional C86 caliper coordinates or a measured C86 distance characterization. Signal nodes are `[0,467,1211,2244,3667,5644,8500,10000]`, axis nodes `[0,5000,10000,15000,20000,25000,30000,33000]`. Treating the public `pcnt` nodes as a normalized ADC fraction is an approximation; NeonHE's firmware normalization is not verified. Per-key polarity-corrected distance `d` and span `s` clamp at0/full. For0<d<s: signal=`floor((d*10000+floor(s/2))/s)`; choose the containing signal segment; axis=`axis0+floor(((signal-x0)*(axis1-axis0)+floor((x1-x0)/2))/(x1-x0))`; travel=`floor((axis*1000+16500)/33000)`. Linear mode retains `floor((d*1000+floor(s/2))/s)` exactly. Both motion directions use one monotonic curve; no hysteretic curve switching or extrapolation. Host mm=`travel*total_travel_mm/1000`. Owlab Ti HE uses the user-supplied nominal3.4mm total travel, proportionally rescaling the source3.3mm curve. Another stroke reuses this shape scaled by its own total travel and remains an approximation; different magnets/geometries can change the shape. UI0.01mm increments do not establish physical0.01mm accuracy. Settings do not save total-travel metadata to device Flash; Studio profiles retain it.
 
