@@ -1,9 +1,41 @@
 """Bundle verified images and source revision; does not program a device."""
 from pathlib import Path
-import argparse,hashlib,json,shutil,subprocess,zipfile
+import argparse,hashlib,json,shutil,subprocess,zipfile,uuid
 from source_evidence import verify_source
 from firmware_artifacts import DISPLAY_VERSION, validate_build_info
 ROOT=Path(__file__).resolve().parents[1]
+PUBLIC_ROOT_DOCS=('README.md','PROTOCOL.md','LICENSE','THIRD_PARTY.md')
+PUBLIC_C86_DOCS=('FIRMWARE-UPDATE.md','HALL-CURVE.md','HALL-FILTER.md',
+                 'MCP-CONTROL.md','RETRIGGER-BEFORE-RELEASE.md')
+
+def public_documents(root,hardware,app_only):
+    """An explicit public allowlist: never package local validation histories."""
+    docs=[(root/name,Path(name)) for name in PUBLIC_ROOT_DOCS]
+    if hardware=='c86':
+        docs.extend((root/'docs'/name,Path('docs')/name) for name in PUBLIC_C86_DOCS)
+        docs.append((root/'C86-FIRST-FLASH.md',Path('C86-FIRST-FLASH.md')))
+        start=root/'docs/FIRMWARE-UPDATE.md' if app_only else root/'C86-FIRST-FLASH.md'
+        docs.append((start,Path('START-HERE-C86.md')))
+    missing=sorted({str(source.relative_to(root)) for source,_ in docs if not source.is_file()})
+    if missing:raise RuntimeError('Required public package documents are missing: '+', '.join(missing))
+    return docs
+
+def copy_public_documents(documents,out):
+    for source,relative in documents:
+        dest=out/relative;dest.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copy2(source,dest)
+
+def prepare_output(root,name):
+    """Preserve incomplete previous output and start clean; never delete it."""
+    parent=(root/'dist').resolve();parent.mkdir(parents=True,exist_ok=True)
+    out=parent/name
+    if out.resolve().parent!=parent:raise ValueError('Package path must stay directly within dist')
+    if out.exists():
+        previous=parent/(name+'.previous-'+uuid.uuid4().hex[:12])
+        out.rename(previous)
+    out.mkdir()
+    return out
+
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--hardware',choices=['c77','c85','c86'],default='c77')
     ap.add_argument('--role',choices=['left','right','both'],default='both')
@@ -52,7 +84,9 @@ def main():
     elif a.adc_dual96_12bit:recovery='-scan96k-dual12-left'
     elif a.adc_dual64:recovery='-scan64k-dual-left'
     elif a.role!='both' and scan_hz!=96000:recovery+=f'-{a.role}'
-    name=f'{a.hardware}-v{version}-{stage}{recovery}';out=ROOT/'dist'/name;out.mkdir(parents=True,exist_ok=True)
+    app_only=scan_hz in (75000,96000) or a.adc_dual64 or a.adc_capture_diag or a.adc_async64
+    documents=public_documents(ROOT,a.hardware,app_only)
+    name=f'{a.hardware}-v{version}-{stage}{recovery}';out=prepare_output(ROOT,name)
     base=ROOT/'build' if a.hardware=='c77' else ROOT/'build'/a.hardware
     if a.hardware=='c86' and scan_hz==16000:base=base/'scan16k'
     elif scan_hz==75000:base=base/'scan75k'
@@ -140,43 +174,7 @@ def main():
         if scan_hz in (75000,96000) or a.adc_dual64 or a.adc_capture_diag or a.adc_async64:
             allowed={f.name for f in candidates}|{'build-info.json'}
             assert all(p.is_file() and p.name in allowed for p in dest.iterdir()),'Unexpected files in app-only package; use a clean release destination'
-    for f in ['README.md','VALIDATION.md','PROTOCOL.md']:shutil.copy2(ROOT/f,out/f)
-    if a.hardware=='c86':
-        if a.adc_async64 or a.adc_async96:
-            shutil.copy2(ROOT/'docs/C86-ADC-ASYNC64.md',out/'START-HERE-C86.md')
-        elif a.adc_isr_probe:
-            shutil.copy2(ROOT/'docs/C86-ADC-ISR-PROBE.md',out/'START-HERE-C86.md')
-        elif a.adc_capture_diag:
-            shutil.copy2(ROOT/'docs/C86-ADC-MATCHED40-DIAG.md',out/'START-HERE-C86.md')
-        elif a.adc_dual64:
-            shutil.copy2(ROOT/'docs/C86-DUAL-ADC-SLOT-TRIAL.md',out/'START-HERE-C86.md')
-        elif a.adc_dual96_12bit:
-            shutil.copy2(ROOT/'docs/C86-96K-DUAL12-BATCH.md',out/'START-HERE-C86.md')
-        elif scan_hz==75000:
-            shutil.copy2(ROOT/'docs/C86-75K-SINGLE.md',out/'START-HERE-C86.md')
-        elif scan_hz==96000:
-            shutil.copy2(ROOT/'docs/C86-96K-14BIT.md',out/'START-HERE-C86.md')
-        else:
-            shutil.copy2(ROOT/'C86-FIRST-FLASH.md',out/'START-HERE-C86.md')
-        (out/'docs').mkdir(exist_ok=True)
-        for doc in ('FIRMWARE-UPDATE.md', 'C86-V031-INSTALL-20261104.md', 'C86-V033-VALIDATION-20261104.json', 'HALL-CURVE.md', 'HALL-FILTER.md'):
-            shutil.copy2(ROOT/'docs'/doc,out/'docs'/doc)
-        if a.adc_capture_diag:
-            shutil.copy2(ROOT/'docs/C86-ADC-MATCHED40-DIAG.md',out/'docs/C86-ADC-MATCHED40-DIAG.md')
-        if a.adc_isr_probe:
-            shutil.copy2(ROOT/'docs/C86-ADC-ISR-PROBE.md',out/'docs/C86-ADC-ISR-PROBE.md')
-        if a.adc_async64 or a.adc_async96:
-            shutil.copy2(ROOT/'docs/C86-ADC-ASYNC64.md',out/'docs/C86-ADC-ASYNC64.md')
-        if scan_hz==75000:
-            shutil.copy2(ROOT/'docs/C86-75K-SINGLE.md',out/'docs/C86-75K-SINGLE.md')
-        if a.adc_dual96_12bit:
-            shutil.copy2(ROOT/'docs/C86-96K-DUAL12-BATCH.md',out/'docs/C86-96K-DUAL12-BATCH.md')
-        if scan_hz==96000 and not a.adc_dual96_12bit and not a.adc_async96:
-            for doc in ('C86-96K-14BIT.md', 'C86-V037-TRIAL-20261107.json', 'C86-V038-TRIAL-20261107.json', 'C86-V039-PREP-20261107.json'):
-                shutil.copy2(ROOT/'docs'/doc,out/'docs'/doc)
-        if a.adc_dual64:
-            for doc in ('C86-DUAL-ADC-SLOT-TRIAL.md','C86-64K-DUAL12.md','C86-V0310-PREP-20261107.json','C86-V039-TRIAL-20261107.json'):
-                shutil.copy2(ROOT/'docs'/doc,out/'docs'/doc)
+    copy_public_documents(documents,out)
     if a.adc_async96:
         selected_verification={role:verification[role] for role in roles}
         (out/'image-verification.json').write_text(json.dumps(selected_verification,indent=2)+'\n',encoding='utf-8')

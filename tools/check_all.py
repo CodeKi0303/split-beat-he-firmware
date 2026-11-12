@@ -15,6 +15,7 @@ def main():
       [sys.executable,'tests/run_split_link_tests.py'],
       [sys.executable,'-m','unittest','tests.host_test'],
       [sys.executable,'-m','unittest','tests.image_artifacts_test'],
+      [sys.executable,'-m','unittest','tests.package_release_test'],
       [sys.executable,'-m','unittest','tests.build_profile_cli_test'],
       [sys.executable,'-m','unittest','tests.host_update_test'],
       [sys.executable,'-m','unittest','tests.host_performance_test'],
