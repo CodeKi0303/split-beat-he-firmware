@@ -4,18 +4,48 @@ import unittest
 
 from host.client import KeyboardClient
 from host.hall_curve import (curve_catalog, normalized_from_raw, normalized_to_mm,
-                             raw_to_estimated_mm)
+                             raw_to_estimated_mm, recognized_travel)
 from host.mcp_configuration import make_studio_profile, parse_studio_profile
 from host.mcp_diagnostics import capture_key_timing, capture_sensors, capability_summary
 from host.protocol import (CAP_HALL_CURVE, ProtocolError, decode_key, encode_key,
                            key_record, MUTATIONS, OUTPUT, SET_KEY)
-from host.simulator import defaults
+from host.simulator import defaults, DemoTransport
 from tests.host_mcp_configuration_test import setup_tools
 from tests.host_key_timing_test import Client
 from tests.host_session_diagnostics_test import Clock, SensorClient
 
 
 class HallCurveTests(unittest.TestCase):
+    def test_recognized_deadzone_boundaries_do_not_rescale_middle_or_raw_estimate(self):
+        config = dict(top_deadzone=88, bottom_deadzone=88, flags=7,
+                      released=1000, pressed=3000, curve_id=0)
+        cases = {0: 0, 50: 0, 88: 0, 89: 89, 500: 500,
+                 911: 911, 912: 1000, 950: 1000, 1000: 1000}
+        for flags in (4, 5, 7, 15):
+            for travel, expected in cases.items():
+                key = {**config, "flags": flags}
+                self.assertEqual(recognized_travel(travel, key), expected)
+                self.assertAlmostEqual(normalized_to_mm(expected, 3.4), expected * .0034)
+        for travel in range(1001):
+            self.assertEqual(recognized_travel(travel, {}), travel)
+        # Raw diagnostics retain the real small signal inside either deadzone.
+        self.assertAlmostEqual(raw_to_estimated_mm(1100, config, 3.4), .17)
+        self.assertAlmostEqual(raw_to_estimated_mm(2900, config, 3.4), 3.23)
+
+    def test_demo_serializes_recognized_travel_without_changing_rt_internal_state(self):
+        transport = DemoTransport()
+        key = transport.profile["keys"][0]
+        key.update(flags=7, released=1000, pressed=3000, top_deadzone=88,
+                   bottom_deadzone=88, curve_id=0, noise_deadband=0)
+        client = KeyboardClient(transport)
+        for travel, expected in ((50, 0), (88, 0), (89, 89), (500, 500),
+                                 (911, 911), (912, 1000), (950, 1000), (0, 0)):
+            transport.pose = [travel] + [0] * 13
+            status = client.status(0)
+            self.assertEqual(status["raw"][0], 1000 + 2 * travel)
+            self.assertEqual(status["travel"][0], expected)
+            self.assertEqual(transport.models[0].previous_travel, travel)
+
     def test_old_records_import_as_linear_with_optional_bottom_independent(self):
         key = defaults()["keys"][0]
         for omitted in (("curve_id",), ("bottom_deadzone",), ("curve_id", "bottom_deadzone")):

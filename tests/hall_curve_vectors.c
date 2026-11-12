@@ -23,7 +23,8 @@ int main(void)
             for (unsigned raw = 0; raw <= 4095; ++raw) {
                 rt_result_t result = rt_key_process(&key, (uint16_t)raw);
                 if (result.pressed) return 3;
-                printf("%s%u", raw ? "," : "", (unsigned)result.travel);
+                /* Pure curve parity excludes the separate reported deadzone clamp. */
+                printf("%s%u", raw ? "," : "", (unsigned)key.travel);
             }
             printf("]}");
         }

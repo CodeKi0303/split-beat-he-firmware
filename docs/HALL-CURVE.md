@@ -33,7 +33,12 @@ interpolation gives normalized estimated travel. AP, press/release RT and both
 deadzones use that corrected travel in firmware. Both motion directions use
 the same curve, so changing direction does not cause a mapping discontinuity.
 
-The display uses `estimated_mm = corrected_travel / 1000 * total_travel_mm`.
+From firmware0.3.41, reported travel is0 inside the top deadzone and1000 inside
+the bottom deadzone, including both boundaries. Values between the bands are
+unchanged. Internal RT calculations and raw-derived curve estimates keep the
+unclamped curve coordinate, preserving press/release/retrigger behavior.
+
+The display uses `estimated_mm = reported_travel / 1000 * total_travel_mm`.
 For another switch with stroke T, the same point on the curve is therefore
 `Owlab_estimated_mm * T / 3.4`. This is the user's requested approximation:
 changing stroke does not characterize a different magnet or sensor geometry.

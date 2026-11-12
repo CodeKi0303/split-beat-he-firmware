@@ -33,7 +33,8 @@ static void test_bottom_deadzone(void){
         for(unsigned i=0;i<sizeof travel/sizeof travel[0];i++){
             uint16_t adc=(uint16_t)(reverse?2000-travel[i]:1000+travel[i]);
             rt_result_t result=rt_key_process(&key,adc);
-            assert(result.travel==travel[i]&&result.pressed==down[i]&&result.changed==(down[i]!=previous));
+            assert(key.travel==travel[i]);
+            assert(result.travel==(travel[i]>=900U?1000U:travel[i])&&result.pressed==down[i]&&result.changed==(down[i]!=previous));
             previous=down[i];
         }
         /* No RT: the bottom zone does not alter the ordinary actuation rule. */
@@ -74,7 +75,8 @@ static void test_reference_curve(void){
     assert(rt_key_configure(&ka,&a));
     for(unsigned raw=0;raw<4096;raw++){
         unsigned expected=raw<=2206?0:raw>=2634?1000:((raw-2206)*1000+214)/428;
-        assert(rt_key_process(&ka,(uint16_t)raw).travel==expected);
+        (void)rt_key_process(&ka,(uint16_t)raw);
+        assert(ka.travel==expected);
     }
     a.curve_id=b.curve_id=RT_CURVE_OWLAB_TI_REFERENCE;
     assert(rt_key_configure(&ka,&a)&&rt_key_configure(&kb,&b));
@@ -443,7 +445,8 @@ static void test_fractional_rt(void)
         for(unsigned i=0;i<10;i++){
             uint32_t q5=reverse?mirror-input[i]:input[i];
             rt_result_t v=rt_key_process_q5(&key,q5);
-            assert(v.travel==travel[i] && v.pressed==down[i] && v.changed==(down[i]!=last));
+            assert(key.travel==travel[i]);
+            assert(v.travel==(travel[i]<=30U?0U:travel[i]) && v.pressed==down[i] && v.changed==(down[i]!=last));
             last=down[i];
         }
         assert(!key.rapid_cycle);

@@ -56,8 +56,26 @@ def normalized_to_mm(travel, total_travel_mm):
     return travel * total_travel_mm / 1000
 
 
+def recognized_travel(travel, key_config):
+    """Snap reported travel at deadzone endpoints; never use as RT input.
+
+    Calibration, raw-derived estimates and internal RT extrema keep their
+    unsnapped values. The interval between the deadzones is not rescaled.
+    """
+    _integer(travel, 0, 1000, "travel")
+    top = _integer(key_config.get("top_deadzone", 0), 0, 999, "top_deadzone")
+    bottom = _integer(key_config.get("bottom_deadzone", 0), 0, 999, "bottom_deadzone")
+    if top + bottom >= 1000:
+        raise ValueError("Deadzones must leave an active travel interval")
+    if travel <= top:
+        return 0
+    if bottom and travel >= 1000 - bottom:
+        return 1000
+    return travel
+
+
 def raw_to_estimated_mm(raw, key_config, total_travel_mm):
-    """Estimated distance for raw snapshots; not proof of physical accuracy."""
+    """Unsnapped diagnostic estimate from raw ADC; not physical accuracy."""
     if not key_config.get("flags", 0) & 4:
         return None
     return normalized_to_mm(normalized_from_raw(raw, key_config["released"],

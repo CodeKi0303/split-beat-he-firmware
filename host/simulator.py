@@ -6,7 +6,7 @@ import struct
 import time
 import zlib
 from .protocol import *
-from .hall_curve import normalized_from_raw
+from .hall_curve import normalized_from_raw, recognized_travel
 from .sampled_rt import SampledRT
 
 
@@ -72,7 +72,7 @@ class DemoTransport:
         if op == INFO:
             if p: raise ProtocolError("length")
             crc = zlib.crc32(b"".join(encode_key(k) for k in self.profile["keys"])+b"".join(encode_binding(b) for b in self.profile["bindings"]))
-            return struct.pack("<8B5IH4B", 0,3,22,0,14,6,4,28,64000,125,0x33f | CAP_KEY_CHORD | CAP_SAVE_OUTPUT | CAP_RETRIGGER_BEFORE_RELEASE, self.generation,crc,1024,86,1,2,bool(self.stored))
+            return struct.pack("<8B5IH4B", 0,3,41,0,14,6,4,28,64000,125,0x33f | CAP_KEY_CHORD | CAP_SAVE_OUTPUT | CAP_RETRIGGER_BEFORE_RELEASE, self.generation,crc,1024,86,1,2,bool(self.stored))
         if op == STATUS:
             if len(p) != 1 or p[0] > 1: raise ProtocolError("side")
             elapsed = time.monotonic()-self.start
@@ -95,6 +95,9 @@ class DemoTransport:
                 else:
                     self.models.pop(key_id, None)
                     self.pressed_mask &= ~(1 << key_id)
+                # Match v0.3.41 telemetry without feeding snapped endpoints
+                # back into SampledRT or changing raw ADC/calibration data.
+                travel[offset] = recognized_travel(travel[offset], key)
             flags = int(self.enabled)|2|(int(self.dirty)<<2)|(int(self.stored is not None)<<3)
             return struct.pack("<4I14H4BIH", int(elapsed*1000),int(elapsed*64000),0,100,*raw,*travel,0,flags,self.cal["key"],self.cal["state"],self.pressed_mask,0)
         if op == GET_KEY:

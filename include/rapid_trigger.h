@@ -31,6 +31,7 @@ typedef struct {
 
 typedef struct {
     rt_config_t config;
+    /* Unclamped curve coordinate used by all RT/retrigger state transitions. */
     uint16_t travel;
     uint16_t extreme;
     bool pressed;
@@ -46,6 +47,7 @@ typedef struct {
 } rt_key_t;
 
 typedef struct {
+    /* Reported coordinate: top band -> 0, bottom band -> 1000; middle unchanged. */
     uint16_t travel;
     bool pressed;
     bool changed;
@@ -87,10 +89,12 @@ void rt_key_reset(rt_key_t *key);
  * With a nonzero bottom deadzone, travel >= 1000-bottom_deadzone holds pressed
  * and anchors the RT peak at that boundary. Release requires rt_release travel
  * above the boundary, so bottom jitter and crossing the boundary alone cannot
- * release/repress. Reported travel remains the selected curve's normalized
- * sample value, not a remapping of the deadzone or a measurement-accuracy claim.
+ * release/repress. Reported travel snaps to0 at/below top_deadzone and to1000
+ * at/above1000-bottom_deadzone. The middle is not rescaled. Internal RT travel
+ * and extrema retain the selected curve's normalized sample value, so this
+ * reporting rule does not change presses/releases/retrigger decisions.
  * With RT off, press at/above actuation and release below actuation.
- * Disabled keys still report normalized travel, but are always released.
+ * Disabled keys use the same reported endpoint rule, but are always released.
  * changed describes only this call's pressed-state transition.
  * Optional retrigger_before_release (default false): while held outside the
  * bottom deadzone, an upward movement starts a valley. A subsequent downward

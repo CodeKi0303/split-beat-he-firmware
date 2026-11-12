@@ -94,7 +94,7 @@ def capture_sensors(client, duration_seconds=2.0, sample_hz=20, include_samples=
     if config is not None:
         result.update(total_travel_mm=list(total_travel_mm),
                       curve_ids=[k.get("curve_id", 0) for k in config["keys"]],
-                      distance_note="STATUS travel is curve-corrected by firmware and scaled once. raw_estimated_mm uses the same curve on raw snapshots; filtering can differ. Both are approximate, not measured physical mm.")
+                      distance_note="STATUS travel is curve-corrected by firmware and scaled once; v0.3.41+ reports deadzone endpoints as 0/1000. raw_estimated_mm is an unsnapped diagnostic estimate from raw ADC; filtering can differ. Both are approximate, not measured physical mm.")
     return result
 
 
@@ -220,7 +220,7 @@ def capture_key_timing(client, key, duration_seconds=5.0, sample_hz=100, include
         result.update(total_travel_mm=total_travel_mm,
                       curve_id=key_config.get("curve_id", 0),
                       key_config=key_config,
-                      distance_note="Firmware STATUS travel is already curve-corrected; travel_mm scales it once. raw_estimated_mm is an approximate raw-snapshot estimate. Proportional stroke scaling is not physical distance verification.")
+                      distance_note="Firmware STATUS travel is already curve-corrected; v0.3.41+ snaps deadzones to 0/1000 and travel_mm scales that once. raw_estimated_mm remains an unsnapped raw-snapshot diagnostic estimate. Proportional stroke scaling is not physical distance verification.")
     return result
 
 

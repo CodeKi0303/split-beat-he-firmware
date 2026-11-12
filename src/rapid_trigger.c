@@ -167,7 +167,11 @@ static rt_result_t process_travel(rt_key_t *key, uint16_t travel)
             }
         }
     }
-    result.travel = key->travel;
+    /* Report settled endpoints without moving RT's peak/valley or previous
+     * sample. No rescaling: the middle retains the normalized curve value. */
+    result.travel = key->travel <= key->config.top_deadzone ? 0U :
+        key->travel >= RT_TRAVEL_MAX-key->config.bottom_deadzone ?
+            RT_TRAVEL_MAX : key->travel;
     result.pressed = key->pressed;
     result.changed = key->pressed != was_pressed;
     return result;
