@@ -25,16 +25,17 @@ static void test_both_polarities(void){
 static void test_bottom_deadzone(void){
     for(unsigned reverse=0;reverse<2;reverse++){
         rt_config_t cfg;rt_config_defaults(&cfg,reverse?2000:1000,reverse?1000:2000);
-        cfg.bottom_deadzone=100;cfg.rt_release=50;cfg.rt_press=50;
+        cfg.bottom_deadzone=1000;cfg.rt_release=500;cfg.rt_press=500;
         rt_key_t key;assert(rt_key_configure(&key,&cfg));
+        /* ADC offsets on a 1000-code span: travel is exactly 10x each offset. */
         const uint16_t travel[]={0,200,940,1000,910,900,899,880,851,850,860,899,900,1000,0,199,200};
         const bool down[]={false,true,true,true,true,true,true,true,true,false,false,false,true,true,false,false,true};
         bool previous=false;
         for(unsigned i=0;i<sizeof travel/sizeof travel[0];i++){
             uint16_t adc=(uint16_t)(reverse?2000-travel[i]:1000+travel[i]);
             rt_result_t result=rt_key_process(&key,adc);
-            assert(key.travel==travel[i]);
-            assert(result.travel==(travel[i]>=900U?1000U:travel[i])&&result.pressed==down[i]&&result.changed==(down[i]!=previous));
+            assert(key.travel==travel[i]*10U);
+            assert(result.travel==(travel[i]>=900U?10000U:travel[i]*10U)&&result.pressed==down[i]&&result.changed==(down[i]!=previous));
             previous=down[i];
         }
         /* No RT: the bottom zone does not alter the ordinary actuation rule. */
@@ -43,8 +44,8 @@ static void test_bottom_deadzone(void){
         assert(!rt_key_process(&key,reverse?1801:1199).pressed);
         cfg.enabled=false;assert(rt_key_configure(&key,&cfg));
         assert(!rt_key_process(&key,reverse?1000:2000).pressed);
-        cfg.bottom_deadzone=801;assert(!rt_key_configure(&key,&cfg));
-        cfg.bottom_deadzone=800;assert(rt_key_configure(&key,&cfg));
+        cfg.bottom_deadzone=8001;assert(!rt_key_configure(&key,&cfg));
+        cfg.bottom_deadzone=8000;assert(rt_key_configure(&key,&cfg));
     }
     /* Zero bottom zone retains the original peak-based release at full depth. */
     rt_config_t cfg;rt_config_defaults(&cfg,1000,2000);rt_key_t key;
@@ -65,7 +66,21 @@ static void test_bottom_config_compatibility(void){
     c77_config_encode(&b,blob);assert(blob[18]==1&&blob[19]==0&&blob[20]==0&&blob[21]==0);
     blob[18]=2;assert(!c77_config_decode(&b,blob));
     blob[18]=0;blob[20]=1;assert(!c77_config_decode(&b,blob));
-    a.keys[0].bottom_deadzone=801;assert(!c77_config_valid(&a));
+    a.keys[0].bottom_deadzone=8001;assert(!c77_config_valid(&a));
+    /* Format77 (firmware <=0.3.42) records hold 0..1000 thresholds. */
+    c77_config legacy_cfg;c77_defaults(&legacy_cfg);legacy_cfg.keys[0].released=3000;legacy_cfg.keys[0].pressed=1000;legacy_cfg.keys[0].flags=7;
+    for(unsigned i=0;i<14;i++){legacy_cfg.keys[i].actuation=176;legacy_cfg.keys[i].rt_press=176;legacy_cfg.keys[i].rt_release=294;legacy_cfg.keys[i].top_deadzone=88;}
+    legacy_cfg.keys[0].bottom_deadzone=88;legacy_cfg.keys[0].noise=7;legacy_cfg.keys[0].curve_id=1;
+    c77_config_encode(&legacy_cfg,legacy);
+    assert(c77_config_decode_legacy(&b,legacy));
+    assert(b.keys[0].actuation==1760&&b.keys[0].rt_press==1760&&b.keys[0].rt_release==2940&&b.keys[0].top_deadzone==880&&b.keys[0].bottom_deadzone==880);
+    assert(b.keys[0].noise==7&&b.keys[0].curve_id==1&&b.keys[0].released==3000&&b.keys[0].pressed==1000&&b.keys[0].flags==7);
+    for(unsigned i=0;i<C77_INPUTS;i++)assert(b.bindings[i].kind==legacy_cfg.bindings[i].kind&&b.bindings[i].code==legacy_cfg.bindings[i].code&&
+        b.bindings[i].modifiers==legacy_cfg.bindings[i].modifiers&&b.bindings[i].third_key==legacy_cfg.bindings[i].third_key);
+    legacy_cfg.keys[1].actuation=1001;c77_config_encode(&legacy_cfg,legacy);
+    assert(!c77_config_decode_legacy(&b,legacy)); /* Not a legacy value. */
+    legacy_cfg.keys[1].actuation=900;legacy_cfg.keys[1].bottom_deadzone=101;c77_config_encode(&legacy_cfg,legacy);
+    assert(!c77_config_decode_legacy(&b,legacy));
 }
 static void test_reference_curve(void){
     rt_config_t a,b;rt_config_defaults(&a,2206,2634);rt_config_defaults(&b,2634,2206);
@@ -74,7 +89,7 @@ static void test_reference_curve(void){
     /* The legacy map must not change for any 12-bit input. */
     assert(rt_key_configure(&ka,&a));
     for(unsigned raw=0;raw<4096;raw++){
-        unsigned expected=raw<=2206?0:raw>=2634?1000:((raw-2206)*1000+214)/428;
+        unsigned expected=raw<=2206?0:raw>=2634?10000:((raw-2206)*10000+214)/428;
         (void)rt_key_process(&ka,(uint16_t)raw);
         assert(ka.travel==expected);
     }
@@ -84,36 +99,36 @@ static void test_reference_curve(void){
     for(unsigned raw=0;raw<4096;raw++){
         rt_result_t ra=rt_key_process(&ka,(uint16_t)raw);
         rt_result_t rb=rt_key_process(&kb,(uint16_t)(4840-raw));
-        assert(ra.travel>=previous&&ra.travel<=1000&&ra.travel==rb.travel);
+        assert(ra.travel>=previous&&ra.travel<=RT_TRAVEL_MAX&&ra.travel==rb.travel);
         assert(ra.pressed==rb.pressed&&ra.changed==rb.changed);
         forward[raw]=ra.travel;previous=ra.travel;
     }
-    assert(forward[0]==0&&forward[2206]==0&&forward[2634]==1000&&forward[4095]==1000);
+    assert(forward[0]==0&&forward[2206]==0&&forward[2634]==10000&&forward[4095]==10000);
     /* Travel does not depend on whether the switch is pressing or releasing. */
     for(int raw=4095;raw>=0;raw--)assert(rt_key_process(&ka,(uint16_t)raw).travel==forward[raw]);
     /* Exact table nodes independently verify all 8 segments' end values. */
     rt_config_defaults(&a,0,10000);a.curve_id=RT_CURVE_OWLAB_TI_REFERENCE;
     assert(rt_key_configure(&ka,&a));
     const uint16_t signal[]={0,467,1211,2244,3667,5644,8500,10000};
-    const uint16_t expected[]={0,152,303,455,606,758,909,1000};
+    const uint16_t expected[]={0,1515,3030,4545,6061,7576,9091,10000};
     for(unsigned i=0;i<8;i++)assert(rt_key_process(&ka,signal[i]).travel==expected[i]);
     /* Rounding and intermediate interpolation, not just literal table nodes. */
-    assert(rt_key_process(&ka,800).travel==219);
-    assert(rt_key_process(&ka,3000).travel==535);
+    assert(rt_key_process(&ka,800).travel==2193);
+    assert(rt_key_process(&ka,3000).travel==5350);
     /* Initial actuation and RT use corrected distance, not the old ADC ratio. */
-    a.rt_press=a.rt_release=100;assert(rt_key_configure(&ka,&a));
-    assert(rt_key_process(&ka,1211).pressed); /* 303 vs old linear 121. */
+    a.rt_press=a.rt_release=1000;assert(rt_key_configure(&ka,&a));
+    assert(rt_key_process(&ka,1211).pressed); /* 3030 vs linear 1211. */
     assert(rt_key_process(&ka,2244).pressed);
     assert(!rt_key_process(&ka,1211).pressed);
     assert(!rt_key_process(&ka,1800).pressed);
     assert(rt_key_process(&ka,2244).pressed);
     assert(!rt_key_process(&ka,0).pressed);
-    a.bottom_deadzone=100;assert(rt_key_configure(&ka,&a));
+    a.bottom_deadzone=1000;assert(rt_key_configure(&ka,&a));
     assert(rt_key_process(&ka,10000).pressed);
     assert(rt_key_process(&ka,8000).pressed);
     assert(!rt_key_process(&ka,5644).pressed);
     a.enabled=false;assert(rt_key_configure(&ka,&a));
-    assert(!rt_key_process(&ka,10000).pressed&&ka.travel==1000);
+    assert(!rt_key_process(&ka,10000).pressed&&ka.travel==10000);
     a.curve_id=2;assert(!rt_key_configure(&ka,&a));
 }
 static void test_rt_and_report(void){
@@ -136,12 +151,12 @@ static void test_commands(void){
     assert(!e.output); /* INFO and initial connection never enable input. */
     uint8_t q[64],bad[64];packet(q,1,NULL,0);for(unsigned i=2;i<64;i++)for(unsigned b=0;b<8;b++){memcpy(bad,q,64);bad[i]^=(uint8_t)(1u<<b);assert(c77_command(&e,bad,r,now,2,1024)&&r[6]==C77_BAD_PACKET);}
     uint8_t index=14;assert(command(3,&index,1,r)==C77_BAD_INDEX);index=0;assert(command(3,&index,1,r)==0);uint8_t key[22];memcpy(key,r+8,22);key[18]=2;assert(command(4,key,22,r)==C77_BAD_CONFIG);
-    setup(true);enable();index=0;assert(command(3,&index,1,r)==0);memcpy(key,r+8,22);key[6]=0xfa;key[7]=0;assert(command(4,key,22,r)==0&&!e.output&&e.dirty&&e.config.keys[0].actuation==250);
+    setup(true);enable();index=0;assert(command(3,&index,1,r)==0);memcpy(key,r+8,22);key[6]=0xc4;key[7]=0x09;assert(command(4,key,22,r)==0&&!e.output&&e.dirty&&e.config.keys[0].actuation==2500);
     key[16]=100;assert(command(4,key,22,r)==0&&r[24]==100&&e.config.keys[0].bottom_deadzone==100&&e.keys[0].config.bottom_deadzone==100);
     key[18]=1;assert(command(4,key,22,r)==0&&r[26]==1&&e.config.keys[0].curve_id==1&&e.keys[0].config.curve_id==1&&!e.output);
     assert(e.config.keys[0].released==3000&&e.config.keys[0].pressed==1000);
-    now+=63;fresh(2758);assert(e.travel[0]==303); /* 1210/10000 signal; rounded travel303. */
-    uint8_t side=0;assert(command(2,&side,1,r)==0&&r[38]==47&&r[39]==1); /* STATUS travel303. */
+    now+=63;fresh(2758);assert(e.travel[0]==3028); /* 1210/10000 signal; rounded travel3028. */
+    uint8_t side=0;assert(command(2,&side,1,r)==0&&r[38]==0xd4&&r[39]==0x0b); /* STATUS travel3028. */
     uint8_t bind[6]={20,2,1,0,0,0};assert(command(10,bind,6,r)==0);bind[0]=0;assert(command(10,bind,6,r)==0);
     bind[1]=5;bind[2]=5;assert(command(10,bind,6,r)==0);bind[2]=6;assert(command(10,bind,6,r)==C77_BAD_CONFIG);
     assert(command(7,NULL,0,r)==0&&e.save_requested&&!e.output&&!e.save_output);assert(command(8,NULL,0,r)==C77_BUSY);
@@ -336,12 +351,12 @@ static void test_conditioned_engine_path(void)
     assert(e.travel[0]==0U && !(e.pressed_mask&1U));
     assert((r[38]|((uint16_t)r[39]<<8))==0U); /* Decision uses average. */
 #else
-    assert(e.travel[0]==1000U && (e.pressed_mask&1U));
+    assert(e.travel[0]==10000U && (e.pressed_mask&1U));
 #endif
     /* A right-side sample can never opt into the private left filter. */
     sample.sequence=e.seen_sequence[1]+1U;sample.timestamp_us=++now;
     c77_update(&e,1,&sample,now);
-    assert(e.travel[7]==1000U && (e.pressed_mask&(1U<<7)));
+    assert(e.travel[7]==10000U && (e.pressed_mask&(1U<<7)));
     /* Raw out-of-range remains invalid even if the average looks normal. */
     sample.sequence=e.seen_sequence[0]+1U;sample.timestamp_us=++now;sample.raw[0]=5000U;
     c77_update(&e,0,&sample,now);c77_tick(&e,now);
@@ -436,22 +451,25 @@ static void test_fractional_rt(void)
         const uint32_t mirror=((uint32_t)low+high)*32U;
         rt_config_t cfg;rt_config_defaults(&cfg,reverse?high:low,reverse?low:high);
         cfg.curve_id=(uint16_t)curve;
-        cfg.rt_press=cfg.rt_release=100;cfg.top_deadzone=30;
+        cfg.rt_press=cfg.rt_release=1000;cfg.top_deadzone=300;
         rt_key_t key;assert(rt_key_configure(&key,&cfg));
         /* Fractional samples on either side of the exact rounded-distance
-         * boundaries. Adjacent samples34553/34554 both round to whole ADC1080,
-         * but only the latter must actuate. Reverse polarity is identical. */
-        const uint32_t linear[]={32000,34553,34554,38400,37127,37126,38393,38394,32391,32390};
-        const uint32_t owlab[]={70496,71451,71452,74128,73047,73046,74122,74123,70625,70624};
+         * boundaries. Adjacent samples34559/34560 both round to whole ADC1080,
+         * but only the latter must actuate. Reverse polarity is identical.
+         * The curve skips some units near rest, hence its own travel row. */
+        const uint32_t linear[]={32000,34559,34560,38400,37121,37120,38399,38400,32385,32384};
+        const uint32_t owlab[]={70496,71454,71455,74128,73043,73042,74127,74128,70622,70621};
         const uint32_t *input=curve?owlab:linear;
-        const uint16_t travel[]={0,199,200,500,401,400,499,500,31,30};
+        const uint16_t linear_travel[]={0,1999,2000,5000,4001,4000,4999,5000,301,300};
+        const uint16_t owlab_travel[]={0,1998,2000,5000,4001,4000,4999,5000,302,298};
+        const uint16_t *travel=curve?owlab_travel:linear_travel;
         const bool down[]={false,false,true,true,true,false,false,true,false,false};
         bool last=false;
         for(unsigned i=0;i<10;i++){
             uint32_t q5=reverse?mirror-input[i]:input[i];
             rt_result_t v=rt_key_process_q5(&key,q5);
             assert(key.travel==travel[i]);
-            assert(v.travel==(travel[i]<=30U?0U:travel[i]) && v.pressed==down[i] && v.changed==(down[i]!=last));
+            assert(v.travel==(travel[i]<=300U?0U:travel[i]) && v.pressed==down[i] && v.changed==(down[i]!=last));
             last=down[i];
         }
         assert(!key.rapid_cycle);
@@ -467,7 +485,7 @@ static void test_fractional_rt(void)
         rt_key_t key;assert(rt_key_configure(&key,&cfg));uint16_t previous=0;
         for(uint32_t q5=0;q5<=RT_ADC_Q5_MAX;q5++){
             rt_result_t r=rt_key_process_q5(&key,q5);
-            assert(r.travel>=previous && r.travel<=1000);previous=r.travel;
+            assert(r.travel>=previous && r.travel<=RT_TRAVEL_MAX);previous=r.travel;
         }
         for(uint32_t q5=RT_ADC_Q5_MAX;q5>0;q5--){
             rt_result_t r=rt_key_process_q5(&key,q5);
@@ -513,8 +531,8 @@ static void test_normalization_cache(void)
         /* Same numeric input after changing endpoint polarity, curve, enable,
          * thresholds and deadzones must follow the new configuration. */
         cfg.adc_released=2000;cfg.adc_pressed=1000;cfg.curve_id=(uint16_t)(1U-curve);
-        cfg.actuation=350;cfg.rt_press=40;cfg.rt_release=70;cfg.top_deadzone=50;
-        cfg.bottom_deadzone=200;cfg.enabled=!cfg.enabled;cfg.rapid_trigger_enabled=!cfg.rapid_trigger_enabled;
+        cfg.actuation=3500;cfg.rt_press=400;cfg.rt_release=700;cfg.top_deadzone=500;
+        cfg.bottom_deadzone=2000;cfg.enabled=!cfg.enabled;cfg.rapid_trigger_enabled=!cfg.rapid_trigger_enabled;
         assert(rt_key_configure(&cached,&cfg)&&rt_key_configure(&reference,&cfg));
         assert(!cached.normalization_kind);
         assert_rt_equal(rt_key_process(&cached,1800),rt_key_process(&reference,1800));
@@ -525,11 +543,11 @@ static void test_normalization_cache(void)
     /* Whole/Q5 numeric inputs have different units, even when identical. */
     rt_config_t cfg;rt_config_defaults(&cfg,0,4000);rt_key_t key;
     assert(rt_key_configure(&key,&cfg));
-    assert(rt_key_process(&key,3000).travel==750);
-    assert(rt_key_process_q5(&key,3000).travel==23);
-    assert(rt_key_process(&key,3000).travel==750);
-    assert(rt_key_process_q5(&key,3000U*32U).travel==750);
-    assert(rt_key_process_q5(&key,RT_ADC_Q5_MAX).travel==1000);
+    assert(rt_key_process(&key,3000).travel==7500);
+    assert(rt_key_process_q5(&key,3000).travel==234);
+    assert(rt_key_process(&key,3000).travel==7500);
+    assert(rt_key_process_q5(&key,3000U*32U).travel==7500);
+    assert(rt_key_process_q5(&key,RT_ADC_Q5_MAX).travel==10000);
     rt_result_t invalid=rt_key_process_q5(&key,RT_ADC_Q5_MAX+1U);
     assert(!invalid.pressed && invalid.changed && !key.normalization_kind);
     assert(rt_key_process_q5(&key,RT_ADC_Q5_MAX).pressed); /* First sample after fault. */
@@ -550,11 +568,11 @@ static void test_fractional_engine_path(void)
     /* Remote frames cannot inject private fractional data, even malformed. */
     s.hall_q5_valid=2U;s.hall_q5[0]=UINT32_MAX;
     s.sequence=e.seen_sequence[1]+1U;s.timestamp_us=++now;
-    c77_update(&e,1,&s,now);assert(e.travel[7]==1000U && c77_source_fresh(&e,1,now));
+    c77_update(&e,1,&s,now);assert(e.travel[7]==10000U && c77_source_fresh(&e,1,now));
     /* Missing validity flag follows the legacy path and discards stale Q5
      * deadband state; later valid Q5 re-enters from its own first sample. */
     s.hall_q5_valid=0U;s.sequence=e.seen_sequence[0]+1U;s.timestamp_us=++now;
-    c77_update(&e,0,&s,now);assert(e.travel[0]==1000U && !e.filtered_q5_ready[0]);
+    c77_update(&e,0,&s,now);assert(e.travel[0]==10000U && !e.filtered_q5_ready[0]);
     s.hall_q5_valid=1U;for(unsigned i=0;i<7;i++)s.hall_q5[i]=96000U;
     s.sequence=e.seen_sequence[0]+1U;s.timestamp_us=++now;
     c77_update(&e,0,&s,now);assert(!e.travel[0]);
@@ -605,7 +623,7 @@ static void test_filtered_rt_response(void)
     for(unsigned i=0;i<14;i++) {
         config.keys[i].released=2200;config.keys[i].pressed=2600;
         config.keys[i].flags=7;config.keys[i].curve_id=1;
-        config.keys[i].actuation=200;config.keys[i].rt_press=100;config.keys[i].rt_release=100;
+        config.keys[i].actuation=2000;config.keys[i].rt_press=1000;config.keys[i].rt_release=1000;
     }
     c77_engine_init(&e,&config,0,false);now=100;
     hall_filter_t filter;hall_filter_reset(&filter);
@@ -616,7 +634,7 @@ static void test_filtered_rt_response(void)
     for(unsigned i=0;i<8;i++){filtered_rt_frame(&filter,2200U);assert(!e.pressed_mask);}
     assert(e.travel[0]==0U);
     for(unsigned i=0;i<8;i++) filtered_rt_frame(&filter,2600U);
-    assert((e.pressed_mask&1U) && e.travel[0]==1000U);
+    assert((e.pressed_mask&1U) && e.travel[0]==10000U);
     for(unsigned i=0;i<8;i++) filtered_rt_frame(&filter,2400U);
     assert(!(e.pressed_mask&1U) && e.keys[0].rapid_cycle); /* Release RT. */
     for(unsigned i=0;i<8;i++) filtered_rt_frame(&filter,2600U);

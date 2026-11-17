@@ -67,11 +67,16 @@ class ConfigurationProposalTests(unittest.TestCase):
     def test_mm_multi_patch_preserves_individual_calibration_and_other_fields(self):
         travel = [4.] * 14
         travel[7] = 3.2
+        fine = propose_keys(self.profile, [0, 7], {"actuation": .801, "rt_release": .12},
+                            unit="mm", travel_mm=travel, capabilities=0x8013f)
+        self.assertEqual([k["actuation"] for k in fine], [2003, 2503])  # 0.001 mm reaches the device
+        self.assertEqual([k["rt_release"] for k in fine], [300, 375])
+        # Firmware before 0.3.43 stores 1/1000 of the stroke: mm input rounds to it.
         proposed = propose_keys(self.profile, [0, 7], {"actuation": .8, "rt_release": .12},
                                 unit="mm", travel_mm=travel, capabilities=0x13f)
-        self.assertEqual([k["actuation"] for k in proposed], [200, 250])
-        self.assertEqual([k["rt_release"] for k in proposed], [30, 38])
-        for key in proposed:
+        self.assertEqual([k["actuation"] for k in proposed], [2000, 2500])
+        self.assertEqual([k["rt_release"] for k in proposed], [300, 380])
+        for key in proposed + fine:
             expected = deepcopy(self.profile["keys"][key["key"]])
             expected.update(actuation=key["actuation"], rt_release=key["rt_release"])
             self.assertEqual(key, expected)
@@ -92,7 +97,7 @@ class ConfigurationProposalTests(unittest.TestCase):
                    ([0], {"enabled": 1}, "normalized"),
                    ([0], {"actuation": True}, "normalized"),
                    ([0], {"actuation": 300.0}, "normalized"),
-                   ([0], {"actuation": .301}, "mm"),
+                   ([0], {"actuation": .3001}, "mm"),
                    ([0], {"actuation": .01, "top_deadzone": .02}, "mm"),
                    ([0], {"actuation": 3.5, "bottom_deadzone": .51}, "mm"),
                    ([0], {"rt_press": 4.01}, "mm"),

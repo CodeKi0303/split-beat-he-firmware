@@ -10,7 +10,11 @@
 #define RECORDS_PER_SECTOR (SECTOR_BYTES / RECORD_BYTES)
 #define RECORD_MAGIC 0x37374B43UL /* CK77 */
 #define COMMIT_MAGIC 0x54494D43UL /* CMIT */
-#define FORMAT_VERSION 77U
+/* 78 (firmware 0.3.43+): travel thresholds in 0..10000. 77: 0..1000, still
+ * read and converted, so an update keeps the saved profile. Firmware <=0.3.42
+ * rejects 78 records and falls back to an older 77 generation (or defaults). */
+#define FORMAT_VERSION 78U
+#define LEGACY_FORMAT_VERSION 77U
 #define PAYLOAD_BYTES C77_CONFIG_BYTES
 #define COMMIT_OFFSET 544U
 
@@ -154,14 +158,17 @@ static void encode_record(uint8_t *record, const c77_config *profile, uint32_t g
 }
 static int decode_record(const uint8_t *record, c77_config *profile, uint32_t *generation, bool *output_enabled)
 {
-    if (get32(record) != RECORD_MAGIC || get16(record + 4) != FORMAT_VERSION ||
+    const uint16_t version = get16(record + 4);
+    if (get32(record) != RECORD_MAGIC ||
+        (version != FORMAT_VERSION && version != LEGACY_FORMAT_VERSION) ||
         get16(record + 6) != PAYLOAD_BYTES || get32(record + 8) == 0U ||
         get32(record + 12) != record_crc(record)) return 0;
     if (record[16] > 1U) return 0;
     for (unsigned i = 17; i < 32U; ++i) if (record[i] != 0U) return 0;
     for(unsigned i=32U+PAYLOAD_BYTES;i<COMMIT_OFFSET;i++) if(record[i]) return 0;
     c77_config decoded;
-    if(!c77_config_decode(&decoded,record+32)) return 0;
+    if(!(version == FORMAT_VERSION ? c77_config_decode(&decoded,record+32) :
+         c77_config_decode_legacy(&decoded,record+32))) return 0;
     uint8_t commit[WORD_BYTES];
     make_commit(commit, get32(record + 8), get32(record + 12));
     if (memcmp(record + COMMIT_OFFSET, commit, WORD_BYTES) != 0) return 0;

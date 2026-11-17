@@ -16,7 +16,7 @@ from .performance import (PERFORMANCE, LINK_PERFORMANCE, LINK_FIELDS, ADC_DIAGNO
                           ADC_IRQ_PROFILE, decode_adc_irq_profile_begin, decode_adc_irq_profile_page,
                           decode_performance, decode_link_performance, decode_adc_diagnostics,
                           compare_samples, delta32)
-from .protocol import integer, CAP_ADC_TRACE, CAP_CPU_PROFILE, CAP_ADC_IRQ_PROFILE, CAP_KEY_CHORD, CAP_RETRIGGER_BEFORE_RELEASE
+from .protocol import integer, CAP_ADC_TRACE, CAP_CPU_PROFILE, CAP_ADC_IRQ_PROFILE, CAP_KEY_CHORD, CAP_RETRIGGER_BEFORE_RELEASE, CAP_FINE_TRAVEL, TRAVEL_MAX
 from .hall_curve import normalized_to_mm, raw_to_estimated_mm
 
 
@@ -94,7 +94,7 @@ def capture_sensors(client, duration_seconds=2.0, sample_hz=20, include_samples=
     if config is not None:
         result.update(total_travel_mm=list(total_travel_mm),
                       curve_ids=[k.get("curve_id", 0) for k in config["keys"]],
-                      distance_note="STATUS travel is curve-corrected by firmware and scaled once; v0.3.41+ reports deadzone endpoints as 0/1000. raw_estimated_mm is an unsnapped diagnostic estimate from raw ADC; filtering can differ. Both are approximate, not measured physical mm.")
+                      distance_note="STATUS travel is curve-corrected by firmware and scaled once; v0.3.41+ reports deadzone endpoints as 0/full travel (0..10000 host units). raw_estimated_mm is an unsnapped diagnostic estimate from raw ADC; filtering can differ. Both are approximate, not measured physical mm.")
     return result
 
 
@@ -140,7 +140,7 @@ def capture_key_timing(client, key, duration_seconds=5.0, sample_hz=100, include
             seq = integer(status.get("sample_sequence"), 0, 0xffffffff, "sample_sequence")
             age = integer(status.get("link_age_us"), 0, 0xffffffff, "link_age_us")
             raw = integer(status["raw"][offset], 0, 4095, "raw")
-            travel = integer(status["travel"][offset], 0, 1000, "travel")
+            travel = integer(status["travel"][offset], 0, TRAVEL_MAX, "travel")
             mask = integer(status.get("pressed_mask"), 0, 0xffffffff, "pressed_mask")
         except (ValueError, IndexError, KeyError, TypeError):
             counts["invalid"] += 1
@@ -220,7 +220,7 @@ def capture_key_timing(client, key, duration_seconds=5.0, sample_hz=100, include
         result.update(total_travel_mm=total_travel_mm,
                       curve_id=key_config.get("curve_id", 0),
                       key_config=key_config,
-                      distance_note="Firmware STATUS travel is already curve-corrected; v0.3.41+ snaps deadzones to 0/1000 and travel_mm scales that once. raw_estimated_mm remains an unsnapped raw-snapshot diagnostic estimate. Proportional stroke scaling is not physical distance verification.")
+                      distance_note="Firmware STATUS travel is already curve-corrected; v0.3.41+ snaps deadzones to 0/full travel (0..10000 host units) and travel_mm scales that once. raw_estimated_mm remains an unsnapped raw-snapshot diagnostic estimate. Proportional stroke scaling is not physical distance verification.")
     return result
 
 
@@ -321,7 +321,7 @@ def read_adc_trace(client, keys):
     if demo or not capability_summary(info)["adc_trace"]:
         return {"supported": False, "demo": demo, **unchanged,
                 "reason": "Requires non-demo C86 left firmware with ADC trace capability 0x400; no trace command sent."}
-    snapshot = decode_adc_trace(client.request(ADC_TRACE, payload))
+    snapshot = decode_adc_trace(client.request(ADC_TRACE, payload), not info["capabilities"] & CAP_FINE_TRAVEL)
     if snapshot["keys"] != keys:
         raise DeviceError("ADC trace returned keys different from the requested order")
     for row in snapshot["rows"]:

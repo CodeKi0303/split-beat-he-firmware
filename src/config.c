@@ -24,7 +24,7 @@ void c77_defaults(c77_config *cfg){
         {.kind=2,.code=1}, {.kind=2,.code=0xffff},
         {.kind=1,.code=0x52}, {.kind=1,.code=0x51}
     };
-    for(unsigned i=0;i<C77_HALL;i++)cfg->keys[i]=(c77_key_config){.actuation=200,.rt_press=100,.rt_release=100,.top_deadzone=30,.noise=2,.flags=3};
+    for(unsigned i=0;i<C77_HALL;i++)cfg->keys[i]=(c77_key_config){.actuation=2000,.rt_press=1000,.rt_release=1000,.top_deadzone=300,.noise=2,.flags=3};
     memcpy(cfg->bindings,bindings,sizeof bindings);
 }
 static bool consumer_valid(uint16_t code){return code==0xb5||code==0xb6||code==0xb7||code==0xcd||code==0xe2||code==0xe9||code==0xea;}
@@ -33,7 +33,7 @@ bool c77_config_valid(const c77_config *cfg){
     for(unsigned i=0;i<C77_HALL;i++){
         const c77_key_config *k=&cfg->keys[i];
         int span=(int)k->pressed-(int)k->released;if(span<0)span=-span;
-        if(k->flags>(HARDWARE_REVISION==86?15:7)||k->released>4095||k->pressed>4095||k->actuation>1000||k->actuation<=k->top_deadzone||k->bottom_deadzone>1000-k->actuation||k->curve_id>RT_CURVE_OWLAB_TI_REFERENCE||!k->rt_press||k->rt_press>1000||!k->rt_release||k->rt_release>1000||k->noise>100||((k->flags&4)&&span<128))return false;
+        if(k->flags>(HARDWARE_REVISION==86?15:7)||k->released>4095||k->pressed>4095||k->actuation>RT_TRAVEL_MAX||k->actuation<=k->top_deadzone||k->bottom_deadzone>RT_TRAVEL_MAX-k->actuation||k->curve_id>RT_CURVE_OWLAB_TI_REFERENCE||!k->rt_press||k->rt_press>RT_TRAVEL_MAX||!k->rt_release||k->rt_release>RT_TRAVEL_MAX||k->noise>100||((k->flags&4)&&span<128))return false;
     }
     for(unsigned i=0;i<C77_INPUTS;i++){
         const c77_binding *b=&cfg->bindings[i];
@@ -77,6 +77,26 @@ bool c77_config_decode(c77_config *cfg,const uint8_t in[C77_CONFIG_BYTES]){
         const uint8_t *p=in+308+i*6;
         if(p[0]!=i)return false;
         tmp.bindings[i]=(c77_binding){.kind=p[1],.code=g16(p+2),.modifiers=p[4],.third_key=p[5]};
+    }
+    if(!c77_config_valid(&tmp))return false;
+    *cfg=tmp;return true;
+}
+/* Journal format77 (firmware <=0.3.42) stores travel thresholds in 0..1000.
+ * Multiplying every distance by10 keeps each threshold at the same fraction of
+ * the stroke and keeps every ordering constraint valid. Raw ADC endpoints,
+ * noise (ADC codes), curve, flags and bindings do not change. */
+bool c77_config_decode_legacy(c77_config *cfg,const uint8_t in[C77_CONFIG_BYTES]){
+    c77_config tmp;
+    if(!c77_config_decode(&tmp,in))return false;
+    for(unsigned i=0;i<C77_HALL;i++){
+        c77_key_config *k=&tmp.keys[i];
+        if(k->actuation>RT_LEGACY_TRAVEL_MAX||k->rt_press>RT_LEGACY_TRAVEL_MAX||k->rt_release>RT_LEGACY_TRAVEL_MAX||
+           k->bottom_deadzone>RT_LEGACY_TRAVEL_MAX-k->actuation)return false;
+        k->actuation=(uint16_t)(k->actuation*RT_LEGACY_TRAVEL_SCALE);
+        k->rt_press=(uint16_t)(k->rt_press*RT_LEGACY_TRAVEL_SCALE);
+        k->rt_release=(uint16_t)(k->rt_release*RT_LEGACY_TRAVEL_SCALE);
+        k->top_deadzone=(uint16_t)(k->top_deadzone*RT_LEGACY_TRAVEL_SCALE);
+        k->bottom_deadzone=(uint16_t)(k->bottom_deadzone*RT_LEGACY_TRAVEL_SCALE);
     }
     if(!c77_config_valid(&tmp))return false;
     *cfg=tmp;return true;

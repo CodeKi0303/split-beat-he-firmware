@@ -28,14 +28,14 @@ int main(void)
     sample.raw[4]=2300U;
     sample.hall_filtered[4]=2200U;
     assert(c77_update_left_bank(&engine,0U,&sample,1000U));
-    assert(engine.travel[0]==300U&&engine.travel[4]==0U);
+    assert(engine.travel[0]==3000U&&engine.travel[4]==0U);
     assert(engine.sample[0].raw[0]==2450U&&!c77_source_fresh(&engine,0U,1000U));
 
     sample.sequence=19U;
     sample.timestamp_us=1100U;
     sample.digital=7U;
     assert(c77_update_left_bank(&engine,1U,&sample,1100U));
-    assert(engine.travel[0]==300U&&engine.travel[4]==400U);
+    assert(engine.travel[0]==3000U&&engine.travel[4]==4000U);
     assert(engine.sample[0].digital==0U);
     assert(engine.sample[0].timestamp_us==1000U&&engine.sample[0].sequence==2U);
     assert(c77_source_fresh(&engine,0U,1100U));
@@ -48,7 +48,7 @@ int main(void)
     sample.timestamp_us=1500U;
     sample.hall_filtered[0]=3000U;
     assert(c77_update_left_bank(&engine,0U,&sample,1500U));
-    assert(engine.cal_count==0U&&engine.travel[0]==0U&&engine.travel[4]==400U);
+    assert(engine.cal_count==0U&&engine.travel[0]==0U&&engine.travel[4]==4000U);
     sample.sequence=20U;
     assert(c77_update_left_bank(&engine,1U,&sample,1500U));
     assert(engine.cal_count==1U);

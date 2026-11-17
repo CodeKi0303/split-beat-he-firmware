@@ -40,7 +40,7 @@ class CalibrationTests(unittest.TestCase):
         self.assertEqual(p["keys"][0], m.original["keys"][0])
         self.assertEqual(p["bindings"], m.original["bindings"])
         self.assertEqual(p["keys"][1]["pressed"], 2000)
-        self.assertEqual(p["keys"][1]["rt_press"], 100)
+        self.assertEqual(p["keys"][1]["rt_press"], 1000)
         self.assertFalse(c.transport.stored)
         self.assertFalse(c.transport.enabled)
 

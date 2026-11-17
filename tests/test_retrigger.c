@@ -5,7 +5,8 @@
 
 static void test_retrigger_machine(void){
     rt_config_t c;rt_key_t k;rt_result_t r;
-    rt_config_defaults(&c,1000,2000);c.rt_press=150;c.rt_release=200;
+    /* ADC offsets below sit on a 1000-code span, so travel is 10x each offset. */
+    rt_config_defaults(&c,1000,2000);c.rt_press=1500;c.rt_release=2000;
     assert(!c.retrigger_before_release);
     assert(rt_key_configure(&k,&c));
     (void)rt_key_process(&k,1500);(void)rt_key_process(&k,1325);
@@ -23,7 +24,7 @@ static void test_retrigger_machine(void){
             if(r.retriggered)assert(!r.changed);
         }
     }
-    c.adc_released=1000;c.adc_pressed=2000;c.bottom_deadzone=100;
+    c.adc_released=1000;c.adc_pressed=2000;c.bottom_deadzone=1000;
     assert(rt_key_configure(&k,&c));
     const uint16_t bottom[]={950,925,990,900,850,1000,900,740,890};
     for(unsigned i=0;i<sizeof bottom/sizeof bottom[0];i++){
@@ -44,7 +45,7 @@ static void retrigger_setup(c77_binding binding){
     c77_config c;c77_defaults(&c);
     for(unsigned i=0;i<C77_HALL;i++){
         c.keys[i].released=1000;c.keys[i].pressed=2000;c.keys[i].flags=7;
-        c.keys[i].rt_press=150;c.keys[i].rt_release=200;c.keys[i].noise=0;
+        c.keys[i].rt_press=1500;c.keys[i].rt_release=2000;c.keys[i].noise=0;
     }
     c.keys[0].flags=15;c.bindings[0]=binding;
     assert(c77_config_valid(&c));c77_engine_init(&e,&c,0,false);

@@ -109,7 +109,7 @@ def trace_payload(keys=(5, 6)):
     # Nonconstant history, endian boundaries, pressed bit and maximum valid travel.
     return (struct.pack("<IIBB", 0xfffffffe, 0x12345678, *keys)
             + struct.pack("<11H", *range(1000, 1008), 1004, 1005, 0x8000 | 321)
-            + struct.pack("<11H", *([4095] * 8), 4095, 4094, 1000))
+            + struct.pack("<11H", *([4095] * 8), 4095, 4094, 10000))
 
 
 def cpu_profile_pages(run_id=0xfffffffe):
@@ -452,7 +452,13 @@ class DiagnosticsTests(unittest.TestCase):
                 {"key": 5, "raw_history": list(range(1000, 1008)), "averaged": 1004,
                  "after_deadband": 1005, "travel": 321, "pressed": True},
                 {"key": 6, "raw_history": [4095] * 8, "averaged": 4095,
-                 "after_deadband": 4094, "travel": 1000, "pressed": False}]})
+                 "after_deadband": 4094, "travel": 10000, "pressed": False}]})
+        # Firmware <=0.3.42 packed 0..1000 in bits 0..9; it is scaled to host units.
+        legacy = bytearray(trace_payload())
+        struct.pack_into("<H", legacy, 52, 1000)
+        struct.pack_into("<H", legacy, 30, 0x8000 | 32)
+        rows = decode_adc_trace(legacy, True)["rows"]
+        self.assertEqual([rows[0]["travel"], rows[0]["pressed"], rows[1]["travel"]], [320, True, 10000])
         self.assertEqual(encode_adc_trace_keys([6, 0]), b"\x06\x00")
         self.assertEqual(decode_adc_trace(memoryview(b"abcd" + trace_payload())[4:]), decoded)
         for keys in (None, (), (5, 6), [], [5], [5, 6, 2], [5, 5], [-1, 6], [0, 7], [True, 6], [5., 6], ["5", 6]):
@@ -467,12 +473,17 @@ class DiagnosticsTests(unittest.TestCase):
         for offset, value, width in ((8, 7, 1), (9, 5, 1),
                                      (10, 4096, 2), (26, 4096, 2), (28, 4096, 2),
                                      (32, 4096, 2), (48, 4096, 2), (50, 4096, 2),
-                                     (30, 1001, 2), (52, 1023, 2),
-                                     *[(30, 1 << bit, 2) for bit in range(10, 15)]):
+                                     (30, 10001, 2), (52, 16383, 2), (30, 1 << 14, 2)):
             bad = bytearray(trace_payload())
             struct.pack_into("<B" if width == 1 else "<H", bad, offset, value)
             with self.subTest(offset=offset, value=value), self.assertRaises(ValueError): decode_adc_trace(bad)
-        client = ADCDiagnosticClient(capabilities=0x400)
+        for offset, value in ((30, 1001), (52, 1023), *[(30, 1 << bit) for bit in range(10, 15)]):
+            bad = bytearray(trace_payload())
+            struct.pack_into("<H", bad, 52, 1000)
+            struct.pack_into("<H", bad, offset, value)
+            with self.subTest(legacy=True, offset=offset, value=value), self.assertRaises(ValueError):
+                decode_adc_trace(bad, True)
+        client = ADCDiagnosticClient(capabilities=0x80400)
         client.payload = bytearray(trace_payload())
         struct.pack_into("<H", client.payload, 26, 2000)  # Plausible wire value; diagnostic inconsistency retained.
         result = read_adc_trace(client, [5, 6])
@@ -491,7 +502,7 @@ class DiagnosticsTests(unittest.TestCase):
         client.identity["demo"] = False
         self.assertFalse(read_adc_trace(client, [5, 6])["supported"])
         self.assertEqual(client.calls, [(1, b"")])
-        client = ADCDiagnosticClient(capabilities=0x400)
+        client = ADCDiagnosticClient(capabilities=0x80400)
         client.payload = trace_payload()
         result = read_adc_trace(client, [5, 6])
         self.assertEqual(client.calls, [(1, b""), (ADC_TRACE, b"\x05\x06")])
@@ -521,7 +532,7 @@ class DiagnosticsTests(unittest.TestCase):
                 result = super()._command(op, payload)
                 if op == 1:
                     result = bytearray(result)
-                    struct.pack_into("<I", result, 16, 0x7ff)
+                    struct.pack_into("<I", result, 16, 0x807ff)
                 return result
         transport = WireTransport(); self.addCleanup(transport.close)
         client = KeyboardClient(transport, write_enabled=False)

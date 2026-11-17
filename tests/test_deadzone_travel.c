@@ -24,7 +24,7 @@ static unsigned comparisons,edges,repeats;
 static uint16_t expected_report(uint16_t travel,const rt_config_t *c)
 {
     if(travel<=c->top_deadzone)return 0U;
-    if(travel>=1000U-c->bottom_deadzone)return 1000U;
+    if(travel>=RT_TRAVEL_MAX-c->bottom_deadzone)return RT_TRAVEL_MAX;
     return travel;
 }
 static void compare_step(rt_key_t *current,rt_key_t *old,uint32_t input,bool q5)
@@ -44,30 +44,31 @@ static void compare_step(rt_key_t *current,rt_key_t *old,uint32_t input,bool q5)
 }
 static void test_boundaries(void)
 {
+    /* ADC offsets on a 1000-code span: travel is exactly 10x each offset. */
     const uint16_t travel[]={0,19,20,21,200,400,899,900,901,999,1000};
     const uint16_t report[]={0,0,0,21,200,400,899,1000,1000,1000,1000};
     for(unsigned reverse=0;reverse<2U;reverse++)for(unsigned q5=0;q5<2U;q5++)
     for(unsigned mode=0;mode<4U;mode++){
         rt_config_t c;rt_config_defaults(&c,reverse?2000U:1000U,reverse?1000U:2000U);
-        c.bottom_deadzone=100U;c.enabled=(mode&1U)!=0U;c.rapid_trigger_enabled=(mode&2U)!=0U;
+        c.bottom_deadzone=1000U;c.enabled=(mode&1U)!=0U;c.rapid_trigger_enabled=(mode&2U)!=0U;
         rt_key_t k;assert(rt_key_configure(&k,&c));
         for(unsigned i=0;i<sizeof travel/sizeof travel[0];i++){
             const uint16_t raw=(uint16_t)(reverse?2000U-travel[i]:1000U+travel[i]);
             rt_result_t r=q5?rt_key_process_q5(&k,raw*32U):rt_key_process(&k,raw);
-            assert(k.travel==travel[i]&&r.travel==report[i]);
+            assert(k.travel==travel[i]*10U&&r.travel==report[i]*10U);
             if(!c.enabled)assert(!r.pressed);
         }
         c.top_deadzone=0U;c.bottom_deadzone=0U;assert(rt_key_configure(&k,&c));
         for(unsigned t=0;t<=1000U;t++){
             const uint16_t raw=(uint16_t)(reverse?2000U-t:1000U+t);
             rt_result_t r=q5?rt_key_process_q5(&k,raw*32U):rt_key_process(&k,raw);
-            assert(r.travel==t&&k.travel==t);
+            assert(r.travel==t*10U&&k.travel==t*10U);
         }
     }
 }
 static void test_previous_decision_parity(void)
 {
-    const uint16_t zones[][2]={{0U,0U},{20U,100U},{150U,400U}};
+    const uint16_t zones[][2]={{0U,0U},{200U,1000U},{1500U,4000U}};
     const uint16_t motion[]={0,20,200,600,550,600,700,550,650,1000,950,900,850,851,400,100,0};
     uint32_t random=0x53825340U;
     for(unsigned curve=0;curve<2U;curve++)for(unsigned reverse=0;reverse<2U;reverse++)
@@ -76,7 +77,7 @@ static void test_previous_decision_parity(void)
         c.curve_id=(uint16_t)curve;c.enabled=(mode&1U)!=0U;
         c.rapid_trigger_enabled=(mode&2U)!=0U;c.retrigger_before_release=(mode&4U)!=0U;
         c.top_deadzone=zones[zone][0];c.bottom_deadzone=zones[zone][1];
-        c.rt_press=50U;c.rt_release=200U;
+        c.rt_press=500U;c.rt_release=2000U;
         rt_key_t current,old;assert(rt_key_configure(&current,&c)&&previous_key_configure(&old,&c));
         for(unsigned i=0;i<sizeof motion/sizeof motion[0];i++){
             const unsigned raw=reverse?3000U-2U*motion[i]:1000U+2U*motion[i];
@@ -109,11 +110,11 @@ static void test_engine_status(void)
     c77_config c;c77_defaults(&c);
     for(unsigned i=0;i<C77_HALL;i++){
         c.keys[i].released=1000U;c.keys[i].pressed=2000U;c.keys[i].flags=7U;
-        c.keys[i].top_deadzone=20U;c.keys[i].bottom_deadzone=100U;c.keys[i].noise=0U;
+        c.keys[i].top_deadzone=200U;c.keys[i].bottom_deadzone=1000U;c.keys[i].noise=0U;
     }
     c77_engine e;c77_engine_init(&e,&c,0U,false);
     const uint16_t position[]={19U,20U,21U,899U,900U,901U};
-    const uint16_t reported[]={0U,0U,21U,899U,1000U,1000U};
+    const uint16_t reported[]={0U,0U,210U,8990U,10000U,10000U};
     for(unsigned n=0;n<6U;n++)for(unsigned side=0;side<2U;side++){
         c77_sample_t s={0};s.valid=1U;s.sequence=n+1U;s.timestamp_us=1000U+n*20U;
         for(unsigned k=0;k<7U;k++){
@@ -134,7 +135,7 @@ static void test_engine_status(void)
         uint8_t response[64];status_packet(&e,side,s.timestamp_us,response);
         assert(read16(response+8U+16U)==(side?1000U+position[n]:2222U));
         assert(read16(response+8U+30U)==reported[n]);
-        assert(e.keys[side*7U].travel==position[n]&&e.travel[side*7U]==reported[n]);
+        assert(e.keys[side*7U].travel==position[n]*10U&&e.travel[side*7U]==reported[n]);
         assert(!e.output);
     }
 }

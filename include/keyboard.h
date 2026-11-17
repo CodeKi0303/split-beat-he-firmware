@@ -9,6 +9,8 @@ enum { C77_BINDING_KEY_CHORD=6, C77_CAP_KEY_CHORD=0x2000 };
 enum { C77_CAP_SAVE_OUTPUT=0x4000 };
 enum { C77_KEY_RETRIGGER=0x08, C77_CAP_RETRIGGER=0x40000 };
 enum { C77_CAP_ADC_TUNING=0x8000,C77_CAP_ADC_PAIR=0x10000,C77_CAP_ADC_PAIR_READ=0x20000 };
+/* Travel thresholds, STATUS.travel and ADC_TRACE travel use 0..10000. */
+enum { C77_CAP_FINE_TRAVEL=0x80000 };
 typedef struct { uint16_t released,pressed,actuation,rt_press,rt_release,top_deadzone,noise,bottom_deadzone,curve_id; uint8_t flags; } c77_key_config;
 /* Chords pack the first two usages into code, low byte first. A zero
  * third_key means the chord has two ordinary keys. */
@@ -52,6 +54,8 @@ void c77_defaults(c77_config *cfg);
 bool c77_config_valid(const c77_config *cfg);
 void c77_config_encode(const c77_config *cfg,uint8_t out[C77_CONFIG_BYTES]);
 bool c77_config_decode(c77_config *cfg,const uint8_t in[C77_CONFIG_BYTES]);
+/* Decode a 0..1000-unit record written by firmware <=0.3.42 into 0..10000 units. */
+bool c77_config_decode_legacy(c77_config *cfg,const uint8_t in[C77_CONFIG_BYTES]);
 void c77_engine_init(c77_engine *e,const c77_config *cfg,uint32_t generation,bool stored);
 void c77_disable(c77_engine *e);
 bool c77_enable_output(c77_engine *e,uint32_t now);

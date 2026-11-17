@@ -69,11 +69,72 @@ class HostTests(unittest.TestCase):
         modern={**legacy,'bottom_deadzone':125}
         self.assertEqual(decode_key(encode_key(modern)),modern)
         self.assertEqual(encode_key(modern)[16:18],bytes([125,0]))
-        for value in (-1,801,False,None):
+        for value in (-1,8001,False,None):
             with self.assertRaises(ProtocolError):key_record({**legacy,'bottom_deadzone':value})
-        self.assertEqual(key_record({**legacy,'bottom_deadzone':800})['bottom_deadzone'],800)
+        self.assertEqual(key_record({**legacy,'bottom_deadzone':8000})['bottom_deadzone'],8000)
         invalid=bytearray(encode_key(modern));invalid[20]=1
         with self.assertRaisesRegex(ProtocolError,'reserved'):decode_key(invalid)
+
+    def test_fine_travel_wire_units_and_legacy_conversion(self):
+        key={**defaults()['keys'][0],'actuation':1765,'rt_press':1,'rt_release':2941,'top_deadzone':883,'bottom_deadzone':882}
+        self.assertEqual(decode_key(encode_key(key)),key)
+        self.assertEqual(struct.unpack_from('<H',encode_key(key),6)[0],1765)
+        with self.assertRaisesRegex(ProtocolError,'0.3.43'):encode_key(key,True)
+        coarse={**key,'actuation':1760,'rt_press':10,'rt_release':2940,'top_deadzone':880,'bottom_deadzone':880}
+        wire=encode_key(coarse,True)
+        self.assertEqual(struct.unpack_from('<6H',wire,6),(176,1,294,88,5,88))  # ...,noise,bottom
+        self.assertEqual(decode_key(wire,True),coarse)
+        too_big=bytearray(wire);struct.pack_into('<H',too_big,6,1001)
+        with self.assertRaisesRegex(ProtocolError,'0..1000'):decode_key(bytes(too_big),True)
+        for value in (0,10001):
+            with self.assertRaises(ProtocolError):key_record({**key,'actuation':value})
+        self.assertEqual(key_record({**key,'actuation':10000,'bottom_deadzone':0})['actuation'],10000)
+        status=bytearray(54);struct.pack_into('<7H',status,30,0,1,500,999,1000,0,0)
+        self.assertEqual(decode_status(bytes(status),True)['travel'][:5],[0,10,5000,9990,10000])
+        self.assertEqual(decode_status(bytes(status))['travel'][:5],[0,1,500,999,1000])
+        struct.pack_into('<H',status,30,1001)
+        with self.assertRaises(ProtocolError):decode_status(bytes(status),True)
+        struct.pack_into('<H',status,30,10001)
+        with self.assertRaises(ProtocolError):decode_status(bytes(status))
+    def test_profiles_carry_travel_scale_and_old_exports_convert(self):
+        profile=defaults()
+        self.assertEqual(profile['travel_max'],TRAVEL_MAX)
+        old={k:v for k,v in profile.items() if k!='travel_max'}
+        old['keys']=[{**k,'actuation':176,'rt_press':176,'rt_release':294,'top_deadzone':88,'bottom_deadzone':88} for k in profile['keys']]
+        converted=validate_profile(old)
+        self.assertEqual(converted['travel_max'],TRAVEL_MAX)
+        self.assertEqual({(k['actuation'],k['rt_press'],k['rt_release'],k['top_deadzone'],k['bottom_deadzone']) for k in converted['keys']},{(1760,1760,2940,880,880)})
+        self.assertEqual(validate_profile(converted),converted)
+        for bad in (1001,):
+            broken=copy.deepcopy(old);broken['keys'][0]['actuation']=bad
+            with self.assertRaises(ProtocolError):validate_profile(broken)
+        with self.assertRaisesRegex(ProtocolError,'travel_max'):validate_profile({**profile,'travel_max':100})
+
+    def test_client_converts_for_firmware_before_fine_travel(self):
+        class Legacy0342(DemoTransport):
+            def __init__(self):super().__init__();self.writes=[]
+            def _command(self,op,p):
+                if op==SET_KEY:self.writes.append(bytes(p))
+                reply=super()._command(op,p)
+                if op==INFO:
+                    reply=bytearray(reply);struct.pack_into('<I',reply,16,struct.unpack_from('<I',reply,16)[0]&~CAP_FINE_TRAVEL)
+                return reply
+        t=Legacy0342();c=KeyboardClient(t,True)
+        self.assertTrue(c.legacy_travel())
+        key={**c.get_config()['keys'][0],'actuation':1760,'top_deadzone':880}
+        self.assertEqual(c.set_key(key),key)
+        self.assertEqual(struct.unpack_from('<H',t.writes[-1],6)[0],176)
+        with self.assertRaisesRegex(ProtocolError,'0.3.43'):c.set_key({**key,'actuation':1765})
+        self.assertEqual(len(t.writes),1)
+        profile=c.get_config();profile['keys'][3]['rt_press']=1001
+        with self.assertRaisesRegex(ProtocolError,'0.3.43'):c.import_profile(profile)  # preflight, before OUTPUT
+        self.assertEqual(len(t.writes),1)
+        t.pose=[5000]+[0]*13
+        self.assertEqual(c.status(0)['travel'][0]%10,0)
+        modern=KeyboardClient(DemoTransport(),True)
+        self.assertFalse(modern.legacy_travel())
+        fine={**modern.get_config()['keys'][0],'actuation':1765}
+        self.assertEqual(modern.set_key(fine),fine)
 
     def test_bottom_capability_preflight_and_save(self):
         class Legacy033(DemoTransport):

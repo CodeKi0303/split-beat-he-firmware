@@ -21,9 +21,10 @@ def main():
         [ROOT/'src/config.c',ROOT/'tests/default_bindings_vectors.c'],['HARDWARE_REVISION=86'])
     encoded=bytes.fromhex(subprocess.check_output([str(exe)],text=True).strip())
     assert len(encoded)==476 and encoded[308:]==expected, 'C serialized bindings differ from canonical JSON'
-    # Mapping-only change: no sampled endpoints, enabled calibration flag,
-    # new thresholds/deadzones, or device identity may enter factory defaults.
-    expected_hall=b''.join(struct.pack('<BB10H',i,3,0,0,200,100,100,30,2,0,0,0) for i in range(14))
+    # Mapping-only baseline: no sampled endpoints, enabled calibration flag,
+    # new deadzones, or device identity may enter factory defaults. The Hall
+    # thresholds are the earlier 200/100/100/30 in 0.3.43's 0..10000 units.
+    expected_hall=b''.join(struct.pack('<BB10H',i,3,0,0,2000,1000,1000,300,2,0,0,0) for i in range(14))
     assert encoded[:308]==expected_hall, 'Factory Hall defaults unexpectedly changed'
     report={'status':'PASS','binding_records':28,'binding_wire_bytes':168,
         'hall_defaults_unchanged':True,'calibration_copied':False,'physical_device_access':False}

@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from tests.run_core_tests import compile_target
 from host.hall_curve import normalized_from_raw, raw_to_estimated_mm
+from host.protocol import TRAVEL_MAX
 
 def main():
     exe = compile_target("hall_curve_vectors", [ROOT / "src/rapid_trigger.c", ROOT / "tests/hall_curve_vectors.c"])
@@ -16,7 +17,7 @@ def main():
     count = 0
     for v in vectors:
         values = v["travel"]
-        assert len(values) == 4096 and min(values) == 0 and max(values) == 1000
+        assert len(values) == 4096 and min(values) == 0 and max(values) == TRAVEL_MAX
         ascending = v["pressed"] > v["released"]
         ordered = values if ascending else list(reversed(values))
         assert all(a <= b for a,b in zip(ordered, ordered[1:])), "curve must remain monotonic"

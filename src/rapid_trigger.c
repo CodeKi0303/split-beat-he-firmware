@@ -27,11 +27,14 @@ static uint16_t normalize_distance(const rt_config_t *config,
     }
     if (distance <= 0) return 0U;
     if (distance >= span) return RT_TRAVEL_MAX;
-    /* Keep legacy behavior bit-for-bit. The largest public uint16 endpoint
-     * span scaled by32 is2097120, so distance*1000 plus half-span still fits
-     * int32_t after clamping. A normalized signal has no distance units. */
+    /* Nearest 1/RT_TRAVEL_MAX of the span. Real 12-bit (and Q5) distances are
+     * <=131064, so distance*10000 plus half-span fits int32_t and uses the
+     * hardware 32-bit divider. The generic API also accepts full uint16
+     * endpoints scaled by32 (span up to 2097120); those need 64 bits. */
     if (config->curve_id == RT_CURVE_LINEAR)
-        return (uint16_t)((distance * RT_TRAVEL_MAX + span / 2) / span);
+        return distance <= RT_ADC_Q5_MAX ?
+            (uint16_t)((distance * RT_TRAVEL_MAX + span / 2) / span) :
+            (uint16_t)(((int64_t)distance * RT_TRAVEL_MAX + span / 2) / span);
 
     /* Public NeonHE Tab60 OW Ti reference nodes, not a C86 characterization.
      * Source: https://neonhe.com/assets/index-C2gKFU8p.js (2026-11-07).
@@ -71,10 +74,10 @@ void rt_config_defaults(rt_config_t *config, uint16_t adc_released,
     if (config == NULL) return;
     config->adc_released = adc_released;
     config->adc_pressed = adc_pressed;
-    config->actuation = 200U;
-    config->rt_press = 50U;
-    config->rt_release = 50U;
-    config->top_deadzone = 20U;
+    config->actuation = 2000U;
+    config->rt_press = 500U;
+    config->rt_release = 500U;
+    config->top_deadzone = 200U;
     config->bottom_deadzone = 0U;
     config->curve_id = RT_CURVE_LINEAR;
     config->enabled = true;

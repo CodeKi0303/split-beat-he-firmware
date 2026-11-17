@@ -45,7 +45,7 @@ and sustained disturbances are not guaranteed to vanish. Host50/100Hz samples
 must not be smoothed offline and presented as a test of the64kHz filter.
 
 The averaged output is rounded to an ADC count. No extra physical resolution
-is claimed: a0.01mm UI increment remains distinct from actual measurement
+is claimed: a0.001mm UI increment remains distinct from actual measurement
 accuracy. Live UI distance scales the device's `STATUS.travel`; raw ADC numbers
 and diagnostic graphs remain raw, so they may still visibly fluctuate after
 the decision path becomes smoother.

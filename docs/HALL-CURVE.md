@@ -33,12 +33,13 @@ interpolation gives normalized estimated travel. AP, press/release RT and both
 deadzones use that corrected travel in firmware. Both motion directions use
 the same curve, so changing direction does not cause a mapping discontinuity.
 
-From firmware0.3.41, reported travel is0 inside the top deadzone and1000 inside
-the bottom deadzone, including both boundaries. Values between the bands are
+From firmware0.3.41, reported travel is0 inside the top deadzone and full travel
+(10000 from0.3.43, 1000 before) inside the bottom deadzone, including both boundaries. Values between the bands are
 unchanged. Internal RT calculations and raw-derived curve estimates keep the
 unclamped curve coordinate, preserving press/release/retrigger behavior.
 
-The display uses `estimated_mm = reported_travel / 1000 * total_travel_mm`.
+The display uses `estimated_mm = reported_travel / 10000 * total_travel_mm` (firmware0.3.43+
+uses travel0..10000; hosts scale older0..1000 firmware by10 first).
 For another switch with stroke T, the same point on the curve is therefore
 `Owlab_estimated_mm * T / 3.4`. This is the user's requested approximation:
 changing stroke does not characterize a different magnet or sensor geometry.
@@ -49,7 +50,7 @@ All firmware/host integer curve paths use this rounding contract:
 1. Clamp below released and above full press after correcting ADC polarity.
 2. `signal = floor((distance * 10000 + floor(span / 2)) / span)`.
 3. In segment `[x0, x1]`, `y = y0 + floor(((signal-x0)*(y1-y0) + floor((x1-x0)/2))/(x1-x0))`.
-4. `travel = floor((y * 1000 + 16500) / 33000)`.
+4. `travel = floor((y * 10000 + 16500) / 33000)` (`1000` before firmware0.3.43).
 
 Curve 0 preserves the previous linear firmware computation exactly. Existing
 profiles and Flash records with zero reserved bytes remain curve 0. Selecting
@@ -61,7 +62,7 @@ retuning or calibration endpoint replacement takes place.
 
 The earlier caliper fixture coordinates are explicitly **not verified stem
 displacement** and are not used as physical-mm curve knots. The 3.4 mm endpoint
-specification alone does not establish the middle of the curve. A 0.01 mm UI
+specification alone does not establish the middle of the curve. A 0.001 mm UI
 increment is not a physical accuracy claim.
 
 The key record adds `curve_id` at bytes 18–19 with capability `0x200`. Firmware

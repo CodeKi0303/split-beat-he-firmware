@@ -29,7 +29,7 @@ class Client:
         down = .04 <= t < .14
         result = dict(fresh=True, sample_sequence=n+1, link_age_us=1000,
                       calibration_state=0, raw=[2000 if down else 1000]*7,
-                      travel=[500 if down else 0]*7,
+                      travel=[5000 if down else 0]*7,
                       pressed_mask=(1 << 9) if down else 0)
         if self.transform:
             result = self.transform(result, n)

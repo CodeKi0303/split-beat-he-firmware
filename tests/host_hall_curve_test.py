@@ -17,16 +17,16 @@ from tests.host_session_diagnostics_test import Clock, SensorClient
 
 class HallCurveTests(unittest.TestCase):
     def test_recognized_deadzone_boundaries_do_not_rescale_middle_or_raw_estimate(self):
-        config = dict(top_deadzone=88, bottom_deadzone=88, flags=7,
+        config = dict(top_deadzone=880, bottom_deadzone=880, flags=7,
                       released=1000, pressed=3000, curve_id=0)
-        cases = {0: 0, 50: 0, 88: 0, 89: 89, 500: 500,
-                 911: 911, 912: 1000, 950: 1000, 1000: 1000}
+        cases = {0: 0, 500: 0, 880: 0, 881: 881, 5000: 5000,
+                 9119: 9119, 9120: 10000, 9500: 10000, 10000: 10000}
         for flags in (4, 5, 7, 15):
             for travel, expected in cases.items():
                 key = {**config, "flags": flags}
                 self.assertEqual(recognized_travel(travel, key), expected)
-                self.assertAlmostEqual(normalized_to_mm(expected, 3.4), expected * .0034)
-        for travel in range(1001):
+                self.assertAlmostEqual(normalized_to_mm(expected, 3.4), expected * .00034)
+        for travel in range(10001):
             self.assertEqual(recognized_travel(travel, {}), travel)
         # Raw diagnostics retain the real small signal inside either deadzone.
         self.assertAlmostEqual(raw_to_estimated_mm(1100, config, 3.4), .17)
@@ -35,14 +35,14 @@ class HallCurveTests(unittest.TestCase):
     def test_demo_serializes_recognized_travel_without_changing_rt_internal_state(self):
         transport = DemoTransport()
         key = transport.profile["keys"][0]
-        key.update(flags=7, released=1000, pressed=3000, top_deadzone=88,
-                   bottom_deadzone=88, curve_id=0, noise_deadband=0)
+        key.update(flags=7, released=1000, pressed=3000, top_deadzone=880,
+                   bottom_deadzone=880, curve_id=0, noise_deadband=0)
         client = KeyboardClient(transport)
-        for travel, expected in ((50, 0), (88, 0), (89, 89), (500, 500),
-                                 (911, 911), (912, 1000), (950, 1000), (0, 0)):
+        for travel, expected in ((500, 0), (880, 0), (885, 885), (5000, 5000),
+                                 (9115, 9115), (9120, 10000), (9500, 10000), (0, 0)):
             transport.pose = [travel] + [0] * 13
             status = client.status(0)
-            self.assertEqual(status["raw"][0], 1000 + 2 * travel)
+            self.assertEqual(status["raw"][0], 1000 + travel // 5)
             self.assertEqual(status["travel"][0], expected)
             self.assertEqual(transport.models[0].previous_travel, travel)
 
@@ -64,13 +64,13 @@ class HallCurveTests(unittest.TestCase):
 
     def test_curve_nodes_and_proportional_stroke_do_not_claim_actual_caliper_mm(self):
         # 22.44% of the ADC span corresponds to 15000/33000 of travel.
-        self.assertEqual(normalized_from_raw(2244, 0, 10000, 1), 455)
-        self.assertEqual(normalized_from_raw(7756, 10000, 0, 1), 455)
-        self.assertAlmostEqual(normalized_to_mm(455, 3.4), 1.547)
-        self.assertAlmostEqual(normalized_to_mm(455, 4.0), 1.82)
-        self.assertAlmostEqual(normalized_to_mm(455, 4.0) / normalized_to_mm(455, 3.4), 4 / 3.4)
+        self.assertEqual(normalized_from_raw(2244, 0, 10000, 1), 4545)
+        self.assertEqual(normalized_from_raw(7756, 10000, 0, 1), 4545)
+        self.assertAlmostEqual(normalized_to_mm(4545, 3.4), 1.5453)
+        self.assertAlmostEqual(normalized_to_mm(4545, 4.0), 1.818)
+        self.assertAlmostEqual(normalized_to_mm(4545, 4.0) / normalized_to_mm(4545, 3.4), 4 / 3.4)
         profile = {"flags": 4, "released": 0, "pressed": 10000, "curve_id": 1}
-        self.assertAlmostEqual(raw_to_estimated_mm(2244, profile, 3.4), 1.547)
+        self.assertAlmostEqual(raw_to_estimated_mm(2244, profile, 3.4), 1.5453)
         self.assertIsNone(raw_to_estimated_mm(2244, {**profile, "flags": 0}, 3.4))
 
     def test_default_stroke_unchanged_and_catalog_has_provenance(self):
@@ -128,7 +128,7 @@ class HallCurveTests(unittest.TestCase):
         client.get_config = lambda: config
         result = capture_key_timing(client, 9, .2, 100, total_travel_mm=3.4,
                                     clock=clock.clock, delay=clock.delay)
-        down = next(row for row in result["samples"] if row["travel"] == 500)
+        down = next(row for row in result["samples"] if row["travel"] == 5000)
         self.assertEqual(down["travel_mm"], 1.7)  # STATUS is already corrected
         self.assertGreater(down["raw_estimated_mm"], down["travel_mm"])
         self.assertEqual(result["curve_id"], 1)
