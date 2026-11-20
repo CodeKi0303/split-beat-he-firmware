@@ -308,7 +308,12 @@ static uint16_t satellite_expected(unsigned unit,uint32_t last,unsigned key)
 }
 static void test_satellite_s7_publication(void)
 {
-    reset();c77_sample_t reply,decoded;uint8_t frame[32];
+    /* Frame layout with the latest-scan window; averaging is checked by check_mean. */
+    reset();
+#if SCAN_ADC_PHASE_PAIR
+    active_filter=1U;
+#endif
+    c77_sample_t reply,decoded;uint8_t frame[32];
     assert(!adc_scan_snapshot(&reply));
     /* Bank0 must be retained when bank1 does not yet have eight samples. */
     advance(0U,10U,true);adc_scan_satellite_service();assert(!adc_scan_snapshot(&reply));
@@ -379,7 +384,7 @@ int main(void)
     reset();advance(0U,8U,true);advance(1U,8U,true);
     c77_sample_t latest;
     assert(snapshot(0U,&latest)&&snapshot(1U,&latest));
-    assert(adc_scan_filter()==1U&&latest.hall_filtered[4]==latest.raw[4]);
+    assert(adc_scan_filter()==8U);check_mean(1U,&latest,producer[1]);
 #if !ROLE_LEFT
     advance(0U,1U,true);advance(1U,1U,true);adc_scan_satellite_service();
     assert(adc_scan_snapshot(&latest));

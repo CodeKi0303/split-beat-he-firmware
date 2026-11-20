@@ -8,7 +8,10 @@ from host.hall_curve import (curve_catalog, normalized_from_raw, normalized_to_m
 from host.mcp_configuration import make_studio_profile, parse_studio_profile
 from host.mcp_diagnostics import capture_key_timing, capture_sensors, capability_summary
 from host.protocol import (CAP_HALL_CURVE, ProtocolError, decode_key, encode_key,
-                           key_record, MUTATIONS, OUTPUT, SET_KEY)
+                           key_record, MUTATIONS, OUTPUT, SET_KEY, CAP_CUSTOM_CURVE,
+                           CUSTOM_CURVE_IDENTITY, encode_custom_curve, decode_custom_curve,
+                           require_key_capability)
+from host.sampled_rt import SampledRT
 from host.simulator import defaults, DemoTransport
 from tests.host_mcp_configuration_test import setup_tools
 from tests.host_key_timing_test import Client
@@ -52,7 +55,7 @@ class HallCurveTests(unittest.TestCase):
             legacy = {k: v for k, v in key.items() if k not in omitted}
             self.assertEqual(key_record(legacy), key)
             self.assertEqual(encode_key(legacy)[16:], bytes(6))
-        for value in (True, -1, 2, 1.0, None):
+        for value in (True, -1, 3, 1.0, None):
             with self.assertRaises(ProtocolError):
                 key_record({**key, "curve_id": value})
         encoded = encode_key({**key, "curve_id": 1})
@@ -158,6 +161,40 @@ class HallCurveTests(unittest.TestCase):
             capture_sensors(client, .2, 10, total_travel_mm=[3.4] * 14,
                             clock=clock.clock, delay=clock.delay)
 
+
+
+class CustomCurveTest(unittest.TestCase):
+    DRAWN = [150, 350, 650, 1050, 1550, 2150, 2850, 3650, 4550, 5500, 6450, 7400, 8300, 9100, 9700]
+
+    def test_identity_matches_linear_and_drawn_table_interpolates(self):
+        for raw in range(900, 3101, 7):
+            self.assertEqual(normalized_from_raw(raw, 1000, 3000, 2, CUSTOM_CURVE_IDENTITY),
+                             normalized_from_raw(raw, 1000, 3000, 0))
+        self.assertEqual(normalized_from_raw(1125, 1000, 3000, 2, self.DRAWN), 150)
+        self.assertEqual(normalized_from_raw(3000, 1000, 3000, 2, self.DRAWN), 10000)
+        with self.assertRaises(ValueError):
+            normalized_from_raw(1125, 1000, 3000, 2)
+
+    def test_codec_and_capability(self):
+        self.assertEqual(list(decode_custom_curve(encode_custom_curve(self.DRAWN))), self.DRAWN)
+        for bad in (self.DRAWN[:14], self.DRAWN[:14] + [10001], [200, 100] + self.DRAWN[2:]):
+            with self.assertRaises(ProtocolError):
+                encode_custom_curve(bad)
+        key = key_record(dict(key=0, flags=7, released=1000, pressed=3000, actuation=2000, rt_press=1000,
+                              rt_release=1000, top_deadzone=200, noise_deadband=0, curve_id=2))
+        with self.assertRaises(ProtocolError):
+            require_key_capability(key, CAP_HALL_CURVE)
+        require_key_capability(key, CAP_HALL_CURVE | CAP_CUSTOM_CURVE)
+        with self.assertRaises(ProtocolError):
+            key_record({**key, "curve_id": 3})
+
+    def test_sampled_rt_uses_the_table(self):
+        key = dict(key=0, flags=7, released=1000, pressed=3000, actuation=2000, rt_press=1000,
+                   rt_release=1000, top_deadzone=200, noise_deadband=0, curve_id=2)
+        rt = SampledRT(key, self.DRAWN)
+        rt.step(1125)
+        self.assertEqual(normalized_from_raw(1125, 1000, 3000, 2, self.DRAWN), 150)
+        self.assertIn(2, [c["curve_id"] for c in curve_catalog()["curves"]])
 
 if __name__ == "__main__":
     unittest.main()

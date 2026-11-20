@@ -30,7 +30,7 @@ static uint32_t dma_started,previous_boundary_cycle,have_previous_boundary,last_
 #if SCAN_ADC_PHASE_PAIR
 static uint32_t active_rate=SCAN_TARGET_HZ;
 static uint32_t ring_cycles=ASYNC_RING_CYCLES,copy_margin_cycles=ASYNC_COPY_MARGIN_CYCLES;
-#define ADC_DEFAULT_FILTER 1U
+#define ADC_DEFAULT_FILTER 8U /* 0.3.46+: common 8-scan moving average at boot. */
 static uint8_t active_filter=ADC_DEFAULT_FILTER;
 uint32_t adc_scan_rate(void) {return active_rate;}
 uint8_t adc_scan_filter(void) {return active_filter;}

@@ -10,13 +10,18 @@
 #define RECORDS_PER_SECTOR (SECTOR_BYTES / RECORD_BYTES)
 #define RECORD_MAGIC 0x37374B43UL /* CK77 */
 #define COMMIT_MAGIC 0x54494D43UL /* CMIT */
-/* 78 (firmware 0.3.43+): travel thresholds in 0..10000. 77: 0..1000, still
- * read and converted, so an update keeps the saved profile. Firmware <=0.3.42
- * rejects 78 records and falls back to an older 77 generation (or defaults). */
-#define FORMAT_VERSION 78U
+/* 79 (firmware 0.3.46+): format 78 plus the 30-byte custom curve. 78
+ * (0.3.43+): travel thresholds in 0..10000. 77: 0..1000, converted. 78/77 load
+ * with the identity custom curve, so an update keeps the saved profile.
+ * Firmware <=0.3.45 rejects 79 records and falls back to an older generation
+ * (or defaults); <=0.3.42 also rejects 78. */
+#define FORMAT_VERSION 79U
+#define FINE_FORMAT_VERSION 78U
 #define LEGACY_FORMAT_VERSION 77U
-#define PAYLOAD_BYTES C77_CONFIG_BYTES
+#define PAYLOAD_BYTES (C77_CONFIG_BYTES + C77_CURVE_BYTES)
+#define OLD_PAYLOAD_BYTES C77_CONFIG_BYTES
 #define COMMIT_OFFSET 544U
+_Static_assert(32U + PAYLOAD_BYTES <= COMMIT_OFFSET, "Settings payload must end before the commit word");
 
 static uint32_t last_error;
 
@@ -152,6 +157,7 @@ static void encode_record(uint8_t *record, const c77_config *profile, uint32_t g
     put16(record + 6, PAYLOAD_BYTES); put32(record + 8, generation);
     record[16] = output_enabled;
     c77_config_encode(profile, record + 32);
+    c77_curve_encode(profile->curve, record + 32 + C77_CONFIG_BYTES);
     uint32_t crc = record_crc(record);
     put32(record + 12, crc);
     make_commit(record + COMMIT_OFFSET, generation, crc);
@@ -159,16 +165,19 @@ static void encode_record(uint8_t *record, const c77_config *profile, uint32_t g
 static int decode_record(const uint8_t *record, c77_config *profile, uint32_t *generation, bool *output_enabled)
 {
     const uint16_t version = get16(record + 4);
+    const uint32_t payload = version == FORMAT_VERSION ? PAYLOAD_BYTES : OLD_PAYLOAD_BYTES;
     if (get32(record) != RECORD_MAGIC ||
-        (version != FORMAT_VERSION && version != LEGACY_FORMAT_VERSION) ||
-        get16(record + 6) != PAYLOAD_BYTES || get32(record + 8) == 0U ||
+        (version != FORMAT_VERSION && version != FINE_FORMAT_VERSION && version != LEGACY_FORMAT_VERSION) ||
+        get16(record + 6) != payload || get32(record + 8) == 0U ||
         get32(record + 12) != record_crc(record)) return 0;
     if (record[16] > 1U) return 0;
     for (unsigned i = 17; i < 32U; ++i) if (record[i] != 0U) return 0;
-    for(unsigned i=32U+PAYLOAD_BYTES;i<COMMIT_OFFSET;i++) if(record[i]) return 0;
+    for(unsigned i=32U+payload;i<COMMIT_OFFSET;i++) if(record[i]) return 0;
     c77_config decoded;
-    if(!(version == FORMAT_VERSION ? c77_config_decode(&decoded,record+32) :
-         c77_config_decode_legacy(&decoded,record+32))) return 0;
+    if(!(version == LEGACY_FORMAT_VERSION ? c77_config_decode_legacy(&decoded,record+32) :
+         c77_config_decode(&decoded,record+32))) return 0;
+    if(version == FORMAT_VERSION &&
+       (!c77_curve_decode(decoded.curve,record+32+C77_CONFIG_BYTES) || !c77_config_valid(&decoded))) return 0;
     uint8_t commit[WORD_BYTES];
     make_commit(commit, get32(record + 8), get32(record + 12));
     if (memcmp(record + COMMIT_OFFSET, commit, WORD_BYTES) != 0) return 0;

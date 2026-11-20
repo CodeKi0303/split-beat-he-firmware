@@ -64,7 +64,8 @@ static void test_bottom_config_compatibility(void){
     blob[16]=0;assert(!memcmp(blob,legacy,C77_CONFIG_BYTES));
     blob[18]=1;assert(c77_config_decode(&b,blob)&&b.keys[0].curve_id==1&&b.keys[0].released==3000&&b.keys[0].pressed==1000);
     c77_config_encode(&b,blob);assert(blob[18]==1&&blob[19]==0&&blob[20]==0&&blob[21]==0);
-    blob[18]=2;assert(!c77_config_decode(&b,blob));
+    blob[18]=2;assert(c77_config_decode(&b,blob)&&b.keys[0].curve_id==RT_CURVE_CUSTOM);
+    blob[18]=3;assert(!c77_config_decode(&b,blob));
     blob[18]=0;blob[20]=1;assert(!c77_config_decode(&b,blob));
     a.keys[0].bottom_deadzone=8001;assert(!c77_config_valid(&a));
     /* Format77 (firmware <=0.3.42) records hold 0..1000 thresholds. */
@@ -129,7 +130,62 @@ static void test_reference_curve(void){
     assert(!rt_key_process(&ka,5644).pressed);
     a.enabled=false;assert(rt_key_configure(&ka,&a));
     assert(!rt_key_process(&ka,10000).pressed&&ka.travel==10000);
-    a.curve_id=2;assert(!rt_key_configure(&ka,&a));
+    a.curve_id=3;assert(!rt_key_configure(&ka,&a));
+}
+static void test_custom_curve(void){
+    /* The identity table reproduces the linear curve exactly. */
+    rt_config_t lin,cus;rt_config_defaults(&lin,2203,2628);rt_config_defaults(&cus,2203,2628);
+    cus.curve_id=RT_CURVE_CUSTOM;rt_key_t kl,kc;assert(rt_key_configure(&kl,&lin)&&rt_key_configure(&kc,&cus));
+    for(uint16_t raw=2150;raw<=2700;raw++){rt_key_process(&kl,raw);rt_key_process(&kc,raw);assert(kl.travel==kc.travel);}
+    /* Hand-checked interpolation on a 0..10000 span: first node 100. */
+    rt_config_defaults(&cus,0,10000);cus.curve_id=RT_CURVE_CUSTOM;cus.custom_curve[0]=100;
+    assert(rt_key_configure(&kc,&cus));
+    rt_key_process(&kc,312);assert(kc.travel==50);
+    rt_key_process(&kc,625);assert(kc.travel==100);
+    rt_key_process(&kc,937);assert(kc.travel==(uint16_t)(100+(312u*(1250u-100u)+312u)/625u));
+    rt_key_process(&kc,10000);assert(kc.travel==RT_TRAVEL_MAX);
+    rt_key_process(&kc,9999);assert(kc.travel==9999);
+    /* Reverse polarity and Q5 use the same table. */
+    rt_config_defaults(&cus,10000,0);cus.curve_id=RT_CURVE_CUSTOM;cus.custom_curve[0]=100;
+    assert(rt_key_configure(&kc,&cus));rt_key_process(&kc,10000-625);assert(kc.travel==100);
+    rt_config_defaults(&cus,0,4000);cus.curve_id=RT_CURVE_CUSTOM;cus.custom_curve[0]=100;
+    assert(rt_key_configure(&kc,&cus));rt_key_process_q5(&kc,250U*RT_ADC_Q5_SCALE);assert(kc.travel==100);
+    /* Non-monotonic or out-of-range tables are refused. */
+    cus.custom_curve[0]=1300;assert(!rt_key_configure(&kc,&cus));
+    cus.custom_curve[0]=100;cus.custom_curve[14]=10001;assert(!rt_key_configure(&kc,&cus));
+    cus.custom_curve[14]=10000;assert(rt_key_configure(&kc,&cus));
+    /* A flat table is allowed: equal outputs only make a dead span. */
+    for(unsigned i=0;i<RT_CUSTOM_CURVE_POINTS;i++)cus.custom_curve[i]=5000;
+    assert(rt_key_configure(&kc,&cus));rt_key_process_q5(&kc,2000U*RT_ADC_Q5_SCALE);assert(kc.travel==5000);
+    /* Config: defaults carry the identity table; validation checks it. */
+    c77_config c;c77_defaults(&c);
+    for(unsigned i=0;i<RT_CUSTOM_CURVE_POINTS;i++)assert(c.curve[i]==(i+1u)*625u);
+    assert(c77_config_valid(&c));c.curve[3]=0;assert(!c77_config_valid(&c));
+    uint8_t enc[C77_CURVE_BYTES];uint16_t back[RT_CUSTOM_CURVE_POINTS];c77_defaults(&c);
+    c.curve[0]=7;c77_curve_encode(c.curve,enc);assert(enc[0]==7&&enc[1]==0&&enc[2]==0xe2&&enc[3]==0x04);
+    assert(c77_curve_decode(back,enc)&&!memcmp(back,c.curve,sizeof back));
+    enc[0]=0xff;enc[1]=0xff;assert(!c77_curve_decode(back,enc)&&back[0]==7);
+}
+static void test_custom_curve_command(void){
+    setup(true);enable();uint8_t r[64],index=0;
+    assert(command(1,NULL,0,r)==0&&(r[26]&0x20));
+    const uint32_t crc_before=(uint32_t)r[32]|((uint32_t)r[33]<<8)|((uint32_t)r[34]<<16)|((uint32_t)r[35]<<24);
+    assert(command(C77_OP_CUSTOM_CURVE,NULL,0,r)==0&&r[7]==30&&r[8]==0x71&&r[9]==0x02&&e.output);
+    uint8_t curve[30];for(unsigned i=0;i<15;i++){uint16_t v=(uint16_t)((i+1u)*500u);curve[2*i]=(uint8_t)v;curve[2*i+1]=(uint8_t)(v>>8);}
+    assert(command(C77_OP_CUSTOM_CURVE,curve,30,r)==0&&r[7]==30&&!memcmp(r+8,curve,30));
+    assert(!e.output&&e.dirty&&e.config.curve[0]==500&&e.keys[0].config.custom_curve[14]==7500);
+    assert(command(1,NULL,0,r)==0);
+    const uint32_t crc_after=(uint32_t)r[32]|((uint32_t)r[33]<<8)|((uint32_t)r[34]<<16)|((uint32_t)r[35]<<24);
+    assert(crc_after!=crc_before&&crc_after==c77_config_crc(&e.config));
+    /* SET_KEY keeps the curve; a key can select it. */
+    assert(command(3,&index,1,r)==0);uint8_t key[22];memcpy(key,r+8,22);key[18]=RT_CURVE_CUSTOM;
+    assert(command(4,key,22,r)==0&&e.config.keys[0].curve_id==RT_CURVE_CUSTOM&&e.config.curve[0]==500);
+    assert(e.keys[0].config.curve_id==RT_CURVE_CUSTOM&&e.keys[0].config.custom_curve[0]==500);
+    /* Bad tables and lengths change nothing. */
+    curve[2]=0;curve[3]=0;assert(command(C77_OP_CUSTOM_CURVE,curve,30,r)==C77_BAD_CONFIG&&e.config.curve[1]==1000);
+    assert(command(C77_OP_CUSTOM_CURVE,curve,29,r)==C77_BAD_PACKET);
+    /* DEFAULTS restores the identity table. */
+    assert(command(8,NULL,0,r)==0&&e.config.curve[0]==625);
 }
 static void test_rt_and_report(void){
     setup(true);enable();now+=63;fresh(2500);assert(e.pressed_mask&1);uint8_t keys[32];uint16_t consumer;c77_report(&e,keys,&consumer);assert(keys[0x2b/8]&(1u<<(0x2b%8)));assert(keys[0xe1/8]&(1u<<(0xe1%8)));
@@ -150,7 +206,7 @@ static void test_commands(void){
     assert(r[25]==(HARDWARE_REVISION==86?0x63:0x43));
     assert(!e.output); /* INFO and initial connection never enable input. */
     uint8_t q[64],bad[64];packet(q,1,NULL,0);for(unsigned i=2;i<64;i++)for(unsigned b=0;b<8;b++){memcpy(bad,q,64);bad[i]^=(uint8_t)(1u<<b);assert(c77_command(&e,bad,r,now,2,1024)&&r[6]==C77_BAD_PACKET);}
-    uint8_t index=14;assert(command(3,&index,1,r)==C77_BAD_INDEX);index=0;assert(command(3,&index,1,r)==0);uint8_t key[22];memcpy(key,r+8,22);key[18]=2;assert(command(4,key,22,r)==C77_BAD_CONFIG);
+    uint8_t index=14;assert(command(3,&index,1,r)==C77_BAD_INDEX);index=0;assert(command(3,&index,1,r)==0);uint8_t key[22];memcpy(key,r+8,22);key[18]=3;assert(command(4,key,22,r)==C77_BAD_CONFIG);
     setup(true);enable();index=0;assert(command(3,&index,1,r)==0);memcpy(key,r+8,22);key[6]=0xc4;key[7]=0x09;assert(command(4,key,22,r)==0&&!e.output&&e.dirty&&e.config.keys[0].actuation==2500);
     key[16]=100;assert(command(4,key,22,r)==0&&r[24]==100&&e.config.keys[0].bottom_deadzone==100&&e.keys[0].config.bottom_deadzone==100);
     key[18]=1;assert(command(4,key,22,r)==0&&r[26]==1&&e.config.keys[0].curve_id==1&&e.keys[0].config.curve_id==1&&!e.output);
@@ -643,7 +699,7 @@ static void test_filtered_rt_response(void)
     assert(!e.pressed_mask && !e.keys[0].rapid_cycle && e.travel[0]==0U);
 }
 #endif
-int main(void){assert(c77_crc16((const uint8_t *)"123456789",9)==0x29b1);assert(c77_crc32((const uint8_t *)"123456789",9)==0xcbf43926u);test_both_polarities();test_bottom_deadzone();test_bottom_config_compatibility();test_reference_curve();test_rt_and_report();test_commands();test_calibration();test_encoder_and_debounce();test_nkro_and_mouse();test_keyboard_completed_report();test_key_chord();test_acquisition_filter_math();test_conditioned_engine_path();test_fractional_filter();test_fractional_rt();test_normalization_cache();
+int main(void){assert(c77_crc16((const uint8_t *)"123456789",9)==0x29b1);assert(c77_crc32((const uint8_t *)"123456789",9)==0xcbf43926u);test_both_polarities();test_bottom_deadzone();test_bottom_config_compatibility();test_reference_curve();test_custom_curve();test_custom_curve_command();test_rt_and_report();test_commands();test_calibration();test_encoder_and_debounce();test_nkro_and_mouse();test_keyboard_completed_report();test_key_chord();test_acquisition_filter_math();test_conditioned_engine_path();test_fractional_filter();test_fractional_rt();test_normalization_cache();
 #if SCAN_DUAL_96K
 test_fractional_engine_path();
 #endif

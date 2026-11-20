@@ -8,18 +8,26 @@ int main(void)
         {0, 4095}, {4095, 0}, {2206, 2634}, {2634, 2206},
         {2000, 2128}, {2128, 2000}
     };
+    /* A gentle-top drawn table (curve 2) plus the identity table. */
+    static const uint16_t drawn[RT_CUSTOM_CURVE_POINTS] = {
+        150, 350, 650, 1050, 1550, 2150, 2850, 3650, 4550, 5500, 6450, 7400, 8300, 9100, 9700
+    };
     puts("[");
     for (unsigned e = 0; e < sizeof endpoints / sizeof endpoints[0]; ++e) {
-        for (unsigned curve = 0; curve < 2; ++curve) {
+        for (unsigned curve = 0; curve < 4; ++curve) {
             rt_config_t config;
             rt_key_t key;
             rt_config_defaults(&config, endpoints[e][0], endpoints[e][1]);
-            config.curve_id = (uint16_t)curve;
+            config.curve_id = (uint16_t)(curve < 2 ? curve : RT_CURVE_CUSTOM);
+            if (curve == 3) for (unsigned i = 0; i < RT_CUSTOM_CURVE_POINTS; ++i) config.custom_curve[i] = drawn[i];
             config.enabled = false;
             if (!rt_key_configure(&key, &config)) return 2;
             if (e || curve) puts(",");
-            printf("{\"released\":%u,\"pressed\":%u,\"curve_id\":%u,\"travel\":[",
-                   (unsigned)endpoints[e][0], (unsigned)endpoints[e][1], curve);
+            printf("{\"released\":%u,\"pressed\":%u,\"curve_id\":%u,\"custom_curve\":[",
+                   (unsigned)endpoints[e][0], (unsigned)endpoints[e][1], (unsigned)config.curve_id);
+            for (unsigned i = 0; i < RT_CUSTOM_CURVE_POINTS; ++i)
+                printf("%s%u", i ? "," : "", (unsigned)config.custom_curve[i]);
+            printf("],\"travel\":[");
             for (unsigned raw = 0; raw <= 4095; ++raw) {
                 rt_result_t result = rt_key_process(&key, (uint16_t)raw);
                 if (result.pressed) return 3;

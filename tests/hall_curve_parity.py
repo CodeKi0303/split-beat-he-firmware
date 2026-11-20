@@ -23,8 +23,10 @@ def main():
         assert all(a <= b for a,b in zip(ordered, ordered[1:])), "curve must remain monotonic"
         key = dict(released=v["released"], pressed=v["pressed"], curve_id=v["curve_id"], flags=7)
         for raw, expected in enumerate(values):
-            actual = normalized_from_raw(raw, v["released"], v["pressed"], v["curve_id"])
+            actual = normalized_from_raw(raw, v["released"], v["pressed"], v["curve_id"], v["custom_curve"])
             assert actual == expected, (v["released"], v["pressed"], v["curve_id"], raw, expected, actual)
+            if v["curve_id"] == 2 and v["custom_curve"] == [(i + 1) * 625 for i in range(15)]:
+                assert actual == normalized_from_raw(raw, v["released"], v["pressed"], 0)
             if v["curve_id"] == 1:
                 at34 = raw_to_estimated_mm(raw, key, 3.4)
                 at40 = raw_to_estimated_mm(raw, key, 4.0)
@@ -34,7 +36,7 @@ def main():
     path.write_text(json.dumps(vectors), encoding="utf-8")
     if os.environ.get('SPLIT_BEAT_STUDIO'):
         subprocess.run(["node", "tests/hall_curve_parity.mjs", str(path)], cwd=ROOT, check=True)
-    report = {"status":"PASS", "sample_count_per_language":count, "endpoint_cases":6, "curve_ids":[0,1], "physical_device_access":False, "physical_mm_accuracy_validated":False}
+    report = {"status":"PASS", "sample_count_per_language":count, "endpoint_cases":6, "curve_ids":[0,1,2], "custom_tables":["identity","gentle-top"], "physical_device_access":False, "physical_mm_accuracy_validated":False}
     (ROOT / "build/host/hall-curve-parity.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
     print(f"C -> Python Hall curve parity PASS: {count} samples; monotonicity and proportional travel checked")
 

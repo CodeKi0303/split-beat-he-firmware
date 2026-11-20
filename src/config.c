@@ -26,14 +26,29 @@ void c77_defaults(c77_config *cfg){
     };
     for(unsigned i=0;i<C77_HALL;i++)cfg->keys[i]=(c77_key_config){.actuation=2000,.rt_press=1000,.rt_release=1000,.top_deadzone=300,.noise=2,.flags=3};
     memcpy(cfg->bindings,bindings,sizeof bindings);
+    rt_custom_curve_linear(cfg->curve);
+}
+void c77_curve_encode(const uint16_t curve[RT_CUSTOM_CURVE_POINTS],uint8_t out[C77_CURVE_BYTES]){
+    for(unsigned i=0;i<RT_CUSTOM_CURVE_POINTS;i++)p16(out+2*i,curve[i]);
+}
+bool c77_curve_decode(uint16_t curve[RT_CUSTOM_CURVE_POINTS],const uint8_t in[C77_CURVE_BYTES]){
+    uint16_t tmp[RT_CUSTOM_CURVE_POINTS];
+    for(unsigned i=0;i<RT_CUSTOM_CURVE_POINTS;i++)tmp[i]=g16(in+2*i);
+    if(!rt_custom_curve_valid(tmp))return false;
+    memcpy(curve,tmp,sizeof tmp);return true;
+}
+uint32_t c77_config_crc(const c77_config *cfg){
+    uint8_t blob[C77_CONFIG_BYTES+C77_CURVE_BYTES];
+    c77_config_encode(cfg,blob);c77_curve_encode(cfg->curve,blob+C77_CONFIG_BYTES);
+    return c77_crc32(blob,sizeof blob);
 }
 static bool consumer_valid(uint16_t code){return code==0xb5||code==0xb6||code==0xb7||code==0xcd||code==0xe2||code==0xe9||code==0xea;}
 bool c77_config_valid(const c77_config *cfg){
-    if(!cfg)return false;
+    if(!cfg||!rt_custom_curve_valid(cfg->curve))return false;
     for(unsigned i=0;i<C77_HALL;i++){
         const c77_key_config *k=&cfg->keys[i];
         int span=(int)k->pressed-(int)k->released;if(span<0)span=-span;
-        if(k->flags>(HARDWARE_REVISION==86?15:7)||k->released>4095||k->pressed>4095||k->actuation>RT_TRAVEL_MAX||k->actuation<=k->top_deadzone||k->bottom_deadzone>RT_TRAVEL_MAX-k->actuation||k->curve_id>RT_CURVE_OWLAB_TI_REFERENCE||!k->rt_press||k->rt_press>RT_TRAVEL_MAX||!k->rt_release||k->rt_release>RT_TRAVEL_MAX||k->noise>100||((k->flags&4)&&span<128))return false;
+        if(k->flags>(HARDWARE_REVISION==86?15:7)||k->released>4095||k->pressed>4095||k->actuation>RT_TRAVEL_MAX||k->actuation<=k->top_deadzone||k->bottom_deadzone>RT_TRAVEL_MAX-k->actuation||k->curve_id>RT_CURVE_CUSTOM||!k->rt_press||k->rt_press>RT_TRAVEL_MAX||!k->rt_release||k->rt_release>RT_TRAVEL_MAX||k->noise>100||((k->flags&4)&&span<128))return false;
     }
     for(unsigned i=0;i<C77_INPUTS;i++){
         const c77_binding *b=&cfg->bindings[i];
@@ -67,7 +82,9 @@ void c77_config_encode(const c77_config *cfg,uint8_t out[C77_CONFIG_BYTES]){
     }
 }
 bool c77_config_decode(c77_config *cfg,const uint8_t in[C77_CONFIG_BYTES]){
-    c77_config tmp;memset(&tmp,0,sizeof tmp);
+    /* The custom curve is not in this encoding: start from the identity table.
+     * Callers that keep a curve (SET_KEY, journal format 79) restore it. */
+    c77_config tmp;memset(&tmp,0,sizeof tmp);rt_custom_curve_linear(tmp.curve);
     for(unsigned i=0;i<C77_HALL;i++){
         const uint8_t *p=in+i*22;c77_key_config *k=&tmp.keys[i];if(p[0]!=i)return false;
         for(unsigned j=20;j<22;j++)if(p[j])return false;

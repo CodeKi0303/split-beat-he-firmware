@@ -9,11 +9,13 @@ static bool config_valid(const rt_config_t *config)
 {
     int32_t span = (int32_t)config->adc_pressed - config->adc_released;
     if (span < 0) span = -span;
+    if (config->curve_id == RT_CURVE_CUSTOM && !rt_custom_curve_valid(config->custom_curve))
+        return false;
     return span >= RT_MIN_ADC_SPAN &&
            config->actuation > config->top_deadzone &&
            config->actuation <= RT_TRAVEL_MAX &&
            config->bottom_deadzone <= RT_TRAVEL_MAX - config->actuation &&
-           config->curve_id <= RT_CURVE_OWLAB_TI_REFERENCE &&
+           config->curve_id <= RT_CURVE_CUSTOM &&
            config->rt_press >= 1U && config->rt_press <= RT_TRAVEL_MAX &&
            config->rt_release >= 1U && config->rt_release <= RT_TRAVEL_MAX;
 }
@@ -52,6 +54,18 @@ static uint16_t normalize_distance(const rt_config_t *config,
         ((uint32_t)distance*10000U+(uint32_t)span/2U)/(uint32_t)span :
         (uint32_t)(((uint64_t)(uint32_t)distance*10000U+
                     (uint32_t)span/2U)/(uint32_t)span);
+    if (config->curve_id == RT_CURVE_CUSTOM) {
+        /* Same rounded signal, then the drawn table on a fixed 625 grid.
+         * Python/JS implement this exact integer sequence. */
+        unsigned segment = signal / RT_CUSTOM_CURVE_STEP;
+        if (segment > RT_CUSTOM_CURVE_POINTS) segment = RT_CUSTOM_CURVE_POINTS;
+        const uint32_t low = segment ? config->custom_curve[segment - 1U] : 0U;
+        const uint32_t high = segment < RT_CUSTOM_CURVE_POINTS ?
+            config->custom_curve[segment] : RT_TRAVEL_MAX;
+        const uint32_t offset = signal - segment * RT_CUSTOM_CURVE_STEP;
+        return (uint16_t)(low + (offset * (high - low) + RT_CUSTOM_CURVE_STEP / 2U) /
+                          RT_CUSTOM_CURVE_STEP);
+    }
     unsigned upper = 1;
     while (upper < 7 && signal > signal_nodes[upper]) upper++;
     const uint32_t width = signal_nodes[upper] - signal_nodes[upper - 1];
@@ -80,6 +94,7 @@ void rt_config_defaults(rt_config_t *config, uint16_t adc_released,
     config->top_deadzone = 200U;
     config->bottom_deadzone = 0U;
     config->curve_id = RT_CURVE_LINEAR;
+    rt_custom_curve_linear(config->custom_curve);
     config->enabled = true;
     config->rapid_trigger_enabled = true;
     config->retrigger_before_release = false;

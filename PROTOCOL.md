@@ -61,7 +61,7 @@ enable. Saving with output off writes a record readable by older firmware.
 Older firmware skips records with byte 16 set. A C86 firmware update initiated
 from a supporting app suppresses auto-enable on its first application boot.
 
-Key record22bytes: u8 key;u8 flags(bit0enabled,bit1RT,bit2calibrated,bit3retrigger-before-release);u16 released;u16 pressed;u16 actuation;u16 rt_press;u16 rt_release;u16 top_deadzone;u16 noise_deadband;u16 bottom_deadzone;u16 curve_id;u16 reserved=0. ADC0..4095. Travel0..10000 (0..1000 before0.3.43) is a normalized coordinate, not millimetres: curve0 reports normalized ADC range; curve1 reports an approximate normalized distance from the reference curve. top_deadzone<actuation<=10000; 0<=bottom_deadzone<=10000-actuation; RT distances1..10000; noise0..100; curve_id0..1. Uncalibrated equal endpoints allowed, calibrated span>=128.
+Key record22bytes: u8 key;u8 flags(bit0enabled,bit1RT,bit2calibrated,bit3retrigger-before-release);u16 released;u16 pressed;u16 actuation;u16 rt_press;u16 rt_release;u16 top_deadzone;u16 noise_deadband;u16 bottom_deadzone;u16 curve_id;u16 reserved=0. ADC0..4095. Travel0..10000 (0..1000 before0.3.43) is a normalized coordinate, not millimetres: curve0 reports normalized ADC range; curve1 reports an approximate normalized distance from the reference curve. top_deadzone<actuation<=10000; 0<=bottom_deadzone<=10000-actuation; RT distances1..10000; noise0..100; curve_id0..2 (2 needs capability `0x200000`, firmware0.3.46+). Uncalibrated equal endpoints allowed, calibrated span>=128.
 
 ### Optional retrigger before release (C86 v0.3.37)
 
@@ -257,7 +257,8 @@ Before v0.3.36 it also accepted a left-only write. From v0.3.36, writes must
 use `ADC_PAIR` to apply a common 5-byte `u32 rate_hz, u8 window` payload.
 Rate choices are 8000, 16000,
 32000, 64000 and 96000. Window choices are 1 (latest scan), 2, 4, 6 and 8.
-From v0.3.36 the boot default is window 1 for every Hall key. Older firmware
+From v0.3.46 the boot default is window 8 (an 8-scan moving average) for every
+Hall key on both halves; v0.3.36 through v0.3.45 booted with window 1. Older firmware
 could report window 0 (R used 8 frames, paired keys used 1).
 The response echoes the active pair. Changes require output off and no pending
 output restore, calibration or save. An averaging-only change keeps acquisition
@@ -286,6 +287,41 @@ From v0.3.36, capability `0x20000` also permits an empty `ADC_PAIR` request
 with output off. This returns the right board's active rate and window
 without applying either. It uses the same temporary S7 pause as a paired
 write. A failed read does not latch a write-uncertain state.
+
+### v0.3.46 custom Hall curve and ADC2 pairing
+
+INFO capability `0x200000` (`CAP_CUSTOM_CURVE`) adds `curve_id` 2: one
+user-drawn table shared by every key that selects it. Like the other curves it
+maps the rounded ADC signal fraction `s = round(distance*10000/span)` (0..10000)
+to travel. The table is fixed on a 625-step grid: outputs at `s = 625, 1250, ...,
+9375` are stored (15 values), the endpoints are always 0 and 10000. Between grid
+points: `seg = min(s/625, 15)`, `low = seg ? table[seg-1] : 0`,
+`high = seg < 15 ? table[seg] : 10000`, `travel = low + ((s - seg*625)*(high-low) + 312)/625`
+(integer division). The table must be non-decreasing within 0..10000; flat runs
+are allowed. The identity table (`625*(i+1)`) reproduces curve 0 exactly. C,
+`host/hall_curve.py` and Studio `hall-curve.mjs` implement the same sequence.
+
+`0x4C CUSTOM_CURVE`:
+- **Request:** empty (read) or 30 bytes = 15 little-endian u16 outputs (write).
+- **Write:** RAM only; like SET_KEY it releases keys, disables output and marks
+  the configuration dirty. A decreasing or out-of-range table returns
+  `BAD_CONFIG` and changes nothing; other lengths return `BAD_PACKET`. BUSY
+  during a save or calibration. DEFAULTS restores the identity table.
+- **Reply** (30 bytes): the current table.
+
+SAVE stores the table: the settings journal writes format79 records (format78
+payload plus the 30-byte table, still inside the 576-byte record). Format78 and
+format77 records load with the identity table. Firmware0.3.45 and earlier
+reject format79 records and fall back to an older generation (or defaults); to
+downgrade, set every key to curve 0 or 1, save from the older firmware's host
+afterwards. INFO `config_crc` is now the CRC32 of the 476-byte key/binding
+encoding followed by the table. `c77-profile-v1` JSON does not carry the table:
+an imported profile with curve 2 uses whatever table the keyboard holds.
+
+C86 ADC2 now converts six ranks per scan (one 64.5-cycle rank, five 32.5-cycle
+ranks; 266 of the 312 ADC1 cycles at 40 MHz, so the scan period is unchanged).
+ADC2 key 0 (left F, right J) averages its first rank with the new sixth rank,
+like every other Hall key; before0.3.46 it used one conversion per scan.
 
 ### C86 v0.3.44 input telemetry
 

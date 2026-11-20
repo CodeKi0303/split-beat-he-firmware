@@ -11,7 +11,7 @@ let count = 0;
 for (const v of vectors) {
   const key = { released: v.released, pressed: v.pressed, curve_id: v.curve_id, flags: 7 };
   for (let raw = 0; raw <= 4095; raw++) {
-    assert.equal(rawToTravel(raw, key), v.travel[raw], `curve ${v.curve_id}, raw ${raw}, endpoints ${v.released}/${v.pressed}`);
+    assert.equal(rawToTravel(raw, key, v.custom_curve), v.travel[raw], `curve ${v.curve_id}, raw ${raw}, endpoints ${v.released}/${v.pressed}`);
     if (v.curve_id === 1) {
       const at34 = rawToEstimatedMm(raw, key, 3.4);
       const at40 = rawToEstimatedMm(raw, key, 4.0);

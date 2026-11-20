@@ -16,6 +16,12 @@ enum {
     RT_MIN_ADC_SPAN = 128,
     RT_CURVE_LINEAR = 0,
     RT_CURVE_OWLAB_TI_REFERENCE = 1,
+    /* 0.3.46+: one user-drawn monotonic table shared by every key using it. */
+    RT_CURVE_CUSTOM = 2,
+    /* Fixed signal grid 0, 625, ..., 10000; only the 15 inner outputs are
+     * stored (the endpoints are always 0 and RT_TRAVEL_MAX). */
+    RT_CUSTOM_CURVE_POINTS = 15,
+    RT_CUSTOM_CURVE_STEP = 625,
     RT_ADC_Q5_SCALE = 32,
     RT_ADC_Q5_MAX = 16383 * 8
 };
@@ -29,6 +35,9 @@ typedef struct {
     uint16_t top_deadzone;
     uint16_t bottom_deadzone;
     uint16_t curve_id;
+    /* Used only by RT_CURVE_CUSTOM: non-decreasing outputs in 0..RT_TRAVEL_MAX
+     * at signal (i+1)*RT_CUSTOM_CURVE_STEP. */
+    uint16_t custom_curve[RT_CUSTOM_CURVE_POINTS];
     bool enabled;
     bool rapid_trigger_enabled;
     bool retrigger_before_release;
@@ -72,9 +81,26 @@ void rt_config_defaults(rt_config_t *config, uint16_t adc_released,
  * Invalid configuration disables processing and returns false. Required:
  * abs(ADC span) >= 128; top_deadzone < actuation <= RT_TRAVEL_MAX;
  * 0 <= bottom_deadzone <= RT_TRAVEL_MAX - actuation;
- * curve_id is RT_CURVE_LINEAR or RT_CURVE_OWLAB_TI_REFERENCE;
+ * curve_id is RT_CURVE_LINEAR, RT_CURVE_OWLAB_TI_REFERENCE or RT_CURVE_CUSTOM
+ * (custom_curve non-decreasing within 0..RT_TRAVEL_MAX);
  * 1 <= rt_press, rt_release <= RT_TRAVEL_MAX. */
 bool rt_key_configure(rt_key_t *key, const rt_config_t *config);
+/* Header-only so settings/config code does not link the RT engine. */
+static inline bool rt_custom_curve_valid(const uint16_t curve[RT_CUSTOM_CURVE_POINTS])
+{
+    uint16_t previous = 0U;
+    for (unsigned i = 0; i < RT_CUSTOM_CURVE_POINTS; i++) {
+        if (curve[i] < previous || curve[i] > RT_TRAVEL_MAX) return false;
+        previous = curve[i];
+    }
+    return true;
+}
+/* Fills the identity table; with it RT_CURVE_CUSTOM equals RT_CURVE_LINEAR. */
+static inline void rt_custom_curve_linear(uint16_t curve[RT_CUSTOM_CURVE_POINTS])
+{
+    for (unsigned i = 0; i < RT_CUSTOM_CURVE_POINTS; i++)
+        curve[i] = (uint16_t)((i + 1U) * RT_CUSTOM_CURVE_STEP);
+}
 
 /* Preserve configuration while releasing/resetting the key. The caller must
  * publish the new released state; reset/configure do not return an edge. */

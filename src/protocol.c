@@ -20,6 +20,18 @@ bool c77_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t now,ui
     uint8_t status=0,length=0;uint8_t *out=r+8;const uint8_t *in=q+8;uint8_t blob[C77_CONFIG_BYTES];
     if(q[2]!=1||q[3]&0x80||!g16(q+4)||q[6]||q[7]>54||c77_crc16(q,62)!=g16(q+62)){status=C77_BAD_PACKET;goto done;}
     for(unsigned i=8+q[7];i<62;i++)if(q[i]){status=C77_BAD_PACKET;goto done;}
+    if(q[3]==C77_OP_CUSTOM_CURVE){
+        /* Empty request reads; 30 bytes replace the shared custom curve in RAM.
+         * Like SET_KEY, a write releases keys, turns output off, marks dirty. */
+        if(q[7]!=0&&q[7]!=C77_CURVE_BYTES){status=C77_BAD_PACKET;goto done;}
+        if(q[7]){
+            if(e->save_requested||e->cal_state){status=C77_BUSY;goto done;}
+            uint16_t curve[RT_CUSTOM_CURVE_POINTS];
+            if(!c77_curve_decode(curve,in)){status=C77_BAD_CONFIG;goto done;}
+            memcpy(e->config.curve,curve,sizeof curve);c77_reconfigure(e);
+        }
+        c77_curve_encode(e->config.curve,out);length=C77_CURVE_BYTES;goto done;
+    }
     const uint8_t sizes[11]={255,0,1,1,22,2,1,0,0,1,6};
     if(q[3]==0||q[3]>10){status=C77_BAD_COMMAND;goto done;}
     if(q[7]!=sizes[q[3]]){status=C77_BAD_PACKET;goto done;}
@@ -29,7 +41,7 @@ bool c77_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t now,ui
     case 1:
         out[0]=(uint8_t)((FW_UPDATE_VERSION>>24)&255U);out[1]=(uint8_t)((FW_UPDATE_VERSION>>16)&255U);out[2]=(uint8_t)(FW_UPDATE_VERSION&255U);
         out[3]=0;out[4]=14;out[5]=6;out[6]=4;out[7]=28;p32(out+8,SCAN_TARGET_HZ);p32(out+12,speed==2?125:1000);
-        uint32_t capabilities=(HARDWARE_REVISION==86?0x3ffu:0x33fu)|C77_CAP_SAVE_OUTPUT|C77_CAP_FINE_TRAVEL;
+        uint32_t capabilities=(HARDWARE_REVISION==86?0x3ffu:0x33fu)|C77_CAP_SAVE_OUTPUT|C77_CAP_FINE_TRAVEL|C77_CAP_CUSTOM_CURVE;
 #if SCAN_ADC_PHASE_PAIR
         p32(out+8,adc_scan_rate());
         capabilities|=C77_CAP_ADC_TUNING|C77_CAP_ADC_PAIR|C77_CAP_ADC_PAIR_READ;
@@ -50,7 +62,7 @@ bool c77_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t now,ui
 #if C77_TELEMETRY
         capabilities|=TELEMETRY_CAPABILITY;
 #endif
-        p32(out+16,capabilities);p32(out+20,e->generation);c77_config_encode(&e->config,blob);p32(out+24,c77_crc32(blob,sizeof blob));p16(out+28,flash);out[30]=HARDWARE_REVISION;out[31]=1;out[32]=speed;out[33]=e->stored_valid;length=34;break;
+        p32(out+16,capabilities);p32(out+20,e->generation);p32(out+24,c77_config_crc(&e->config));p16(out+28,flash);out[30]=HARDWARE_REVISION;out[31]=1;out[32]=speed;out[33]=e->stored_valid;length=34;break;
     case 2:{
         unsigned side=in[0];if(side>1){status=C77_BAD_INDEX;break;}
         const c77_sample_t *s=&e->sample[side];p32(out,e->uptime_ms);p32(out+4,s->sequence);p32(out+8,e->errors+s->errors+e->pulse_drops);p32(out+12,e->seen[side]?now-s->timestamp_us:0xffffffffu);
@@ -63,6 +75,7 @@ bool c77_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t now,ui
         unsigned maximum=q[3]==4?14:28;if(in[0]>=maximum){status=C77_BAD_INDEX;break;}
         c77_config_encode(&e->config,blob);length=q[3]==4?22:6;unsigned offset=q[3]==4?in[0]*22:308+in[0]*6;memcpy(blob+offset,in,length);
         c77_config candidate;if(!c77_config_decode(&candidate,blob)){status=C77_BAD_CONFIG;length=0;break;}
+        memcpy(candidate.curve,e->config.curve,sizeof candidate.curve);
         e->config=candidate;c77_reconfigure(e);memcpy(out,blob+offset,length);break;}
     case 5:{
         unsigned key=in[0],action=in[1];if(key>=14){status=C77_BAD_INDEX;break;}if(action>3){status=C77_BAD_CONFIG;break;}

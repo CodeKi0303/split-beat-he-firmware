@@ -11,11 +11,15 @@ enum { C77_KEY_RETRIGGER=0x08, C77_CAP_RETRIGGER=0x40000 };
 enum { C77_CAP_ADC_TUNING=0x8000,C77_CAP_ADC_PAIR=0x10000,C77_CAP_ADC_PAIR_READ=0x20000 };
 /* Travel thresholds, STATUS.travel and ADC_TRACE travel use 0..10000. */
 enum { C77_CAP_FINE_TRAVEL=0x80000 };
+/* 0.3.46+: curve_id 2 and command 0x4C read/write the shared custom curve. */
+enum { C77_CAP_CUSTOM_CURVE=0x200000, C77_OP_CUSTOM_CURVE=0x4C, C77_CURVE_BYTES=2*RT_CUSTOM_CURVE_POINTS };
 typedef struct { uint16_t released,pressed,actuation,rt_press,rt_release,top_deadzone,noise,bottom_deadzone,curve_id; uint8_t flags; } c77_key_config;
 /* Chords pack the first two usages into code, low byte first. A zero
  * third_key means the chord has two ordinary keys. */
 typedef struct { uint16_t code; uint8_t kind,modifiers,third_key; } c77_binding;
-typedef struct { c77_key_config keys[C77_HALL]; c77_binding bindings[C77_INPUTS]; } c77_config;
+/* curve is the shared RT_CURVE_CUSTOM table. It is not part of the 476-byte
+ * key/binding encoding; storage and INFO config_crc append it. */
+typedef struct { c77_key_config keys[C77_HALL]; c77_binding bindings[C77_INPUTS]; uint16_t curve[RT_CUSTOM_CURVE_POINTS]; } c77_config;
 typedef struct {
     c77_config config;
     rt_key_t keys[C77_HALL];
@@ -54,6 +58,11 @@ void c77_defaults(c77_config *cfg);
 bool c77_config_valid(const c77_config *cfg);
 void c77_config_encode(const c77_config *cfg,uint8_t out[C77_CONFIG_BYTES]);
 bool c77_config_decode(c77_config *cfg,const uint8_t in[C77_CONFIG_BYTES]);
+/* Custom curve: 15 little-endian u16. Decode rejects a non-monotonic table. */
+void c77_curve_encode(const uint16_t curve[RT_CUSTOM_CURVE_POINTS],uint8_t out[C77_CURVE_BYTES]);
+bool c77_curve_decode(uint16_t curve[RT_CUSTOM_CURVE_POINTS],const uint8_t in[C77_CURVE_BYTES]);
+/* CRC32 of the key/binding encoding followed by the custom curve. */
+uint32_t c77_config_crc(const c77_config *cfg);
 /* Decode a 0..1000-unit record written by firmware <=0.3.42 into 0..10000 units. */
 bool c77_config_decode_legacy(c77_config *cfg,const uint8_t in[C77_CONFIG_BYTES]);
 void c77_engine_init(c77_engine *e,const c77_config *cfg,uint32_t generation,bool stored);
