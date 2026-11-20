@@ -19,7 +19,7 @@ def compile_target(name,sources,defines=()):
 def main():
     baseline=ROOT/'tests/fixtures/rapid_trigger_v040.c'
     assert hashlib.sha256(baseline.read_bytes()).hexdigest()=='942639bb80af080fe61bbe6087a0bf06fde7148c78ca8395b0e57c98b8fe9357', 'Frozen v0.3.40 RT baseline changed'
-    core=[ROOT/'src'/s for s in ['config.c','rapid_trigger.c','engine.c','protocol.c']]
+    core=[ROOT/'src'/s for s in ['config.c','rapid_trigger.c','engine.c','protocol.c','telemetry.c']]
     for name,sources in [('test_core',core+[ROOT/'tests/test_core.c']),('test_settings',[ROOT/'src/config.c',ROOT/'tests/test_settings.c'])]:
         exe=compile_target(name,sources);subprocess.run([str(exe)],check=True)
     for revision in (85,86):
@@ -33,6 +33,8 @@ def main():
     subprocess.run([str(exe)],check=True)
     compile_target('core_bridge',core+[ROOT/'tests/core_bridge.c'])
     exe=compile_target('test_retrigger',core+[ROOT/'tests/test_retrigger.c'],['HARDWARE_REVISION=86'])
+    subprocess.run([str(exe)],check=True)
+    exe=compile_target('test_telemetry',core+[ROOT/'tests/test_telemetry.c'],['HARDWARE_REVISION=86','ROLE_LEFT=1'])
     subprocess.run([str(exe)],check=True)
     for name,defines in (
         ('test_deadzone_travel',['HARDWARE_REVISION=86']),

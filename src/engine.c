@@ -1,5 +1,6 @@
 #include "keyboard.h"
 #include "hardware_profile.h"
+#include "telemetry.h"
 #include <string.h>
 static void install(c77_engine *e,unsigned i){
     const c77_key_config *k=&e->config.keys[i];
@@ -68,6 +69,10 @@ static inline bool update_hall(c77_engine *e,unsigned side,const c77_sample_t *s
         unsigned i=side*7+j;uint16_t raw=s->raw[j];if(raw>4095){valid=false;e->errors++;continue;}
         if(e->cal_key==i)calibrate_sample(e,raw);
         rt_result_t result;
+#if C77_TELEMETRY
+        uint16_t traced=raw;
+        const bool was_pressed=(e->pressed_mask>>i)&1u;
+#endif
 #if SCAN_DUAL_96K
         if(side==0U && s->hall_q5_valid) {
             uint32_t q5=s->hall_q5[j];
@@ -77,6 +82,9 @@ static inline bool update_hall(c77_engine *e,unsigned side,const c77_sample_t *s
                delta>=(uint32_t)e->config.keys[i].noise*RT_ADC_Q5_SCALE)
                 e->filtered_q5[j]=q5;
             e->filtered_q5_ready[j]=1U;
+#if C77_TELEMETRY
+            traced=(uint16_t)(q5/RT_ADC_Q5_SCALE);
+#endif
             result=rt_key_process_q5(&e->keys[i],e->filtered_q5[j]);
         } else
 #endif
@@ -90,6 +98,9 @@ static inline bool update_hall(c77_engine *e,unsigned side,const c77_sample_t *s
             if(decision_raw>4095U){valid=false;e->errors++;continue;}
         }
 #endif
+#if C77_TELEMETRY
+        traced=decision_raw;
+#endif
         int delta=(int)decision_raw-e->filtered[i];if(delta<0)delta=-delta;
 #if SCAN_DUAL_96K
         bool changed_path=side==0U && e->filtered_q5_ready[j];
@@ -102,6 +113,13 @@ static inline bool update_hall(c77_engine *e,unsigned side,const c77_sample_t *s
         }
         e->travel[i]=result.travel;
         if(result.pressed)e->pressed_mask|=1u<<i;else e->pressed_mask&=~(1u<<i);
+#if C77_TELEMETRY
+        {
+            const bool edge=result.pressed!=was_pressed||result.retriggered;
+            telemetry_hall(i,traced,s->timestamp_us,edge);
+            if(edge)telemetry_decision(i,result.pressed,result.retriggered,result.travel,s->timestamp_us);
+        }
+#endif
         if(!result.pressed&&(e->retrigger_mask&(1u<<i))){e->retrigger[i]=0;e->retrigger_mask&=(uint16_t)~(1u<<i);}
         if(result.retriggered&&e->output&&!first){
             const c77_binding *b=&e->config.bindings[i];

@@ -5,6 +5,7 @@
 #include "cpu_profile.h"
 #include "adc_irq_probe.h"
 #include "fw_update.h"
+#include "telemetry.h"
 #if SCAN_ADC_PHASE_PAIR
 #include "adc_async.h"
 #endif
@@ -45,6 +46,9 @@ bool c77_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t now,ui
 #endif
 #if defined(C86_ADC_IRQ_PROBE)
         capabilities|=ADC_IRQ_PROBE_CAPABILITY;
+#endif
+#if C77_TELEMETRY
+        capabilities|=TELEMETRY_CAPABILITY;
 #endif
         p32(out+16,capabilities);p32(out+20,e->generation);c77_config_encode(&e->config,blob);p32(out+24,c77_crc32(blob,sizeof blob));p16(out+28,flash);out[30]=HARDWARE_REVISION;out[31]=1;out[32]=speed;out[33]=e->stored_valid;length=34;break;
     case 2:{

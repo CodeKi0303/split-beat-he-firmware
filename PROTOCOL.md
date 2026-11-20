@@ -275,6 +275,45 @@ with output off. This returns the right board's active rate and window
 without applying either. It uses the same temporary S7 pause as a paired
 write. A failed read does not latch a write-uncertain state.
 
+### C86 v0.3.44 input telemetry
+
+INFO capability `0x100000` (C86 left master only) adds an opt-in record of what
+the keyboard saw during play, for aligning with a game's own input log. It is
+read-only with respect to input: no RT state, output, binding or saved setting
+changes, and it is allowed with output on. It is RAM-only and off at boot.
+Recording uses a 16384-record ring in AXI SRAM. A full ring counts lost records
+instead of overwriting unread ones. If no `TELEMETRY_READ` arrives for 3 s, the
+master disarms and discards the ring.
+
+Every record carries the device `board_micros()` time (u32 µs, wraps after about
+71.6 minutes). Record kinds:
+
+| kind | index | value | time |
+|---|---|---|---|
+| 0 sample | Hall key 0–13 | 12-bit decision input before the noise deadband (left: the latest-window value; right: the received S7 code) | sample timestamp: left bank copy time, right = left receipt time |
+| 1 decision | Hall key 0–13 | travel 0–10000 (bits0–13, the 0.3.43 fine-travel unit), bit14 retriggered, bit15 pressed | same sample timestamp as the sample that caused it |
+| 2 usb | 0 | HID usage (bits0–7), bit8 pressed | when the main loop observed the completed EP1 IN report that first carried the change (at most one loop late) |
+
+A key's sample is recorded when it changed by at least `threshold` ADC counts
+and at least `interval_us` passed since its previous sample. Its first sample
+after arming is always recorded, and so is every sample that produced a
+decision. Decisions record pressed-state changes and retriggers.
+
+`0x4A TELEMETRY_CONTROL`:
+- **Request:** empty (status only), or 4 bytes `u8 enable, u8 threshold 1..255, u16 interval_us 0..10000`.
+- **Arm or disarm:** both clear the ring. Invalid parameters return `BAD_CONFIG`.
+- **Reply** (20 bytes): `u8 armed, u8 threshold, u16 interval_us, u32 capacity, u32 now_us, u32 dropped, u32 pending`.
+
+`0x4B TELEMETRY_READ`:
+- **Request:** empty. Returns `NOT_READY` when disarmed with nothing buffered.
+- **Reply** (14 + 5·n bytes, n ≤ 8): `u32 now_us, u32 base_us, u32 dropped, u8 n, u8 flags` (bit0 armed, bit1 more pending).
+- **Records:** n × `{i16 delta_us, u8 kind<<6|index, u16 value}`.
+- **Times:** the first record's time is `base_us` (delta 0). Each later record adds its delta to the previous record's time, so deltas can be negative because left and right timestamps interleave. A gap outside ±32767 µs starts the next reply.
+
+Host `now_us` with the request send/receive host times anchors device time to
+the PC clock (`host.telemetry_recorder` records both). This is not a USB wire
+timestamp. Nothing here measures Windows or game-side latency by itself.
+
 `0x46 ADC_IRQ_PROBE` is available only on C86 left 64 kHz sampled-probe
 apps with INFO capability `0x1000`. Request `[0]` arms one 500 ms window
 and returns a nonzero u32 run ID. Start conditions, ACK drain (up to 50 ms),

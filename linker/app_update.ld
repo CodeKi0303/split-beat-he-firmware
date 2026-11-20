@@ -22,6 +22,7 @@ SECTIONS {
  .bss (NOLOAD) : { . = ALIGN(4); _sbss = .; *(.bss*) *(COMMON) . = ALIGN(4); _ebss = .; } > DTCM
  .heap_stack (NOLOAD) : { . = ALIGN(8); end = .; _end = .; . += 4096; . += 8192; . = ALIGN(8); } > DTCM
  .dma_buffer (NOLOAD) : { . = ALIGN(32); __dma_start__ = .; KEEP(*(.dma_buffer*)) . = ALIGN(32); __dma_end__ = .; } > AXISRAM
+ .telemetry (NOLOAD) : { . = ALIGN(32); __telemetry_start__ = .; KEEP(*(.telemetry*)) . = ALIGN(32); __telemetry_end__ = .; } > AXISRAM
  /DISCARD/ : { *(.note.GNU-stack) }
  .ARM.attributes 0 : { *(.ARM.attributes) }
 }

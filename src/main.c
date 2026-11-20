@@ -26,6 +26,11 @@
 #if ROLE_LEFT
 #include "usb_device.h"
 #endif
+#include "telemetry.h"
+#if C77_TELEMETRY
+#include <string.h>
+static uint8_t telemetry_last_report[32];
+#endif
 volatile uint32_t diagnostic_fault_cfsr,diagnostic_fault_hfsr;
 void _init(void){}
 void _fini(void){}
@@ -104,6 +109,11 @@ int main(void){
          * pulses actually represented in a completed USB IN report. */
         uint8_t completed[32];uint32_t completed_count,completed_tag;
         if(usb_keyboard_take_completed_tagged(completed,&completed_count,&completed_tag)){
+#if C77_TELEMETRY
+            /* Stamped when the main loop observes the completion: at most one loop late. */
+            telemetry_usb(telemetry_last_report,completed,board_micros());
+            memcpy(telemetry_last_report,completed,32);
+#endif
             c77_keyboard_report_acked(&engine,completed,now);
             c77_retrigger_report_acked(&engine,0,completed,completed_tag,now);
         }
@@ -170,6 +180,9 @@ int main(void){
         adc_pair_watch_link(now);
 #endif
         c77_tick(&engine,now);
+#if C77_TELEMETRY
+        telemetry_poll(now);
+#endif
         if(engine.restore_output_pending&&usb_configured()
 #if SCAN_ADC_PHASE_PAIR
            && !adc_pair.uncertain
@@ -242,6 +255,11 @@ int main(void){
                 if(performance_command(request,response)){
                     response_pending=1;CPU_PROFILE_END(prof_vendor,CPU_PROF_VENDOR);continue;
                 }
+#if C77_TELEMETRY
+                if(telemetry_command(request,response,board_micros())){
+                    response_pending=1;CPU_PROFILE_END(prof_vendor,CPU_PROF_VENDOR);continue;
+                }
+#endif
                 if(fw_runtime_maintenance()&&request[3]!=1&&request[3]!=2&&request[3]!=3&&request[3]!=9){
                     /* No settings save/reset/enable during an interrupted
                      * satellite update. Local UPDATE_RUN exits explicitly. */

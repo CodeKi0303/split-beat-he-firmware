@@ -134,14 +134,16 @@ class KeyboardClient:
         # The dedicated FirmwareUpdater owns update permission and sequencing.
         # Even right-side update INFO changes relay/output state, so unknown
         # opcodes must never bypass the normal configuration mutation gate.
-        if type(op) is not int or not (1 <= op <= 10 or 0x40 <= op <= ADC_PAIR):
+        if type(op) is not int or not (1 <= op <= 10 or 0x40 <= op <= TELEMETRY_READ):
             raise ProtocolError("Unsupported configuration opcode; firmware updates require the dedicated updater")
         mutates = op in MUTATIONS or (op in (ADC_TUNING, ADC_PAIR) and bool(payload))
         if mutates and not self.write_enabled:
             raise PermissionError("read-only session: restart with --write-enabled for configuration changes")
         with self.lock:
-            if (mutates or op in (ADC_TUNING, ADC_COMPARE, ADC_PAIR)) and not self.identified:
+            if (mutates or op in (ADC_TUNING, ADC_COMPARE, ADC_PAIR, TELEMETRY_CONTROL, TELEMETRY_READ)) and not self.identified:
                 self.info()
+            if op in (TELEMETRY_CONTROL, TELEMETRY_READ) and not self.device_info["capabilities"] & CAP_TELEMETRY:
+                raise ProtocolError("This firmware does not support input telemetry (C86 left v0.3.44+)")
             if op in (ADC_TUNING, ADC_COMPARE) and not self.device_info["capabilities"] & CAP_ADC_TUNING:
                 raise ProtocolError("This firmware does not support ADC tuning")
             if op == ADC_TUNING and payload and self.device_info["capabilities"] & CAP_ADC_PAIR_READ:

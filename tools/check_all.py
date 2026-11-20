@@ -20,6 +20,7 @@ def main():
       [sys.executable,'-m','unittest','tests.build_profile_cli_test'],
       [sys.executable,'-m','unittest','tests.host_update_test'],
       [sys.executable,'-m','unittest','tests.host_performance_test'],
+      [sys.executable,'-m','unittest','tests.host_telemetry_test'],
       [sys.executable,'-m','unittest','tests.host_session_diagnostics_test','tests.host_mcp_configuration_test','tests.host_mcp_calibration_test','tests.host_mcp_maintenance_test'],
       [sys.executable,'-m','unittest','tests.host_key_timing_test'],
       [sys.executable,'-m','unittest','tests.host_retrigger_test'],
