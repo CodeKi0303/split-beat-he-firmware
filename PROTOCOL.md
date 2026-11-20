@@ -195,7 +195,19 @@ frames. IRQ counts include inactive handler calls; elapsed cycles include
 higher-priority preemption, not only that handler's CPU work. Main-loop gap
 excludes the first entry. Updates count newly consumed source sequences,
 not ADC triggers. Counter differences wrap at32bits; maxima are lifetime
-values. CC state/error use the existing controller enum. These observations
+values. CC state uses the existing controller enum. Firmware 0.3.45+ packs
+the cc_error word: bits0-7 current controller error (the earlier enum; older
+firmware sends only this), bits8-15 last CC fault since boot, bits16-23 CC
+fault retries since boot, bits24-31 automatic split-link restarts since boot
+(both saturating at 255). Hosts keep `cc_error` raw and add
+`cc_current_error`, `cc_last_error`, `cc_retries` and `link_restarts`. A CC fault
+keeps the right-half supply blocked and the FUSB303B disabled for 1 s, then
+reinitializes it; a load-switch fault is retried at most three times per USB
+session and then latches until upstream unconfiguration. A split link stopped
+by a fatal DMA error restarts after 10 ms; an intentional transmit abort (for
+example when CC removes the right-half supply) is no longer such an error.
+Before 0.3.45 either event left the right half missing until a USB replug.
+These observations
 are not an atomic electrical measurement or CPU utilization percentage.
 Read this alongside0x40/41/42 and both STATUS replies before evaluating a
 stale-source trial. The command never clears counters or restarts hardware;

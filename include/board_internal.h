@@ -15,6 +15,8 @@ void adc_scan_stop(void);
 bool adc_scan_snapshot(c77_sample_t *out);
 void split_link_start(void);
 void split_link_stop(void);
+/* Main-loop recovery of a link stopped by a fatal DMA error. */
+void split_link_service(void);
 void split_link_allow(bool allowed);
 bool split_link_snapshot(c77_sample_t *out);
 void board_input_scan(c77_sample_t *sample);

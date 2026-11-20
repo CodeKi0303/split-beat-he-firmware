@@ -17,6 +17,8 @@ typedef struct {
      * consumed DMA bytes, including invalid/update frames, not valid packets.
      * flags: bit0 active, bit1 allowed, bit2 transmitting, bit3 update_mode. */
     uint32_t flags,rx_bytes,uart_irq_max_cycles,poll_irq_max_cycles,uart_irqs,poll_irqs;
+    /* Automatic restarts after a fatal DMA error left the link inactive. */
+    uint32_t restarts;
 } split_link_stats_t;
 void split_link_stats(split_link_stats_t *out);
 

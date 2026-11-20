@@ -11,7 +11,9 @@ static cc_fusb303b controller;
 static volatile cc_io_result transfer_result;
 static volatile bool transport_fault;
 static bool clock_ready,bus_ready;
-/* Visible to SWD; no new wire-protocol promise is made by these diagnostics. */
+/* Visible to SWD and 0x43. cc_error word: bits0-7 current error, bits8-15
+ * last fault since boot, bits16-23 fault retries since boot (saturating);
+ * 0x43 adds split-link restarts in bits24-31. */
 volatile uint32_t diagnostic_cc_state,diagnostic_cc_error;
 
 static void cancel(void *context)
@@ -87,7 +89,8 @@ void board_cc_service(void)
     __set_PRIMASK(irq);
     split_link_allow(allowed);
     diagnostic_cc_state=(uint32_t)controller.state;
-    diagnostic_cc_error=(uint32_t)controller.error;
+    diagnostic_cc_error=(uint32_t)controller.error|((uint32_t)controller.last_error<<8)|
+        ((uint32_t)controller.retries<<16);
 }
 void I2C1_EV_IRQHandler(void)
 {

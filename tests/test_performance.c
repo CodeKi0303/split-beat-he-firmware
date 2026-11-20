@@ -62,6 +62,12 @@ int main(void){
     verify(0x41,link_schema);assert(usb_reads==1&&adc_reads==1&&link_reads==1&&time_reads==2);
     verify(0x42,diagnostic_schema);assert(usb_reads==1&&adc_reads==2&&link_reads==1&&time_reads==2);
     verify(0x43,schedule_schema);assert(usb_reads==1&&adc_reads==2&&link_reads==2&&time_reads==3);
+    /* cc_error word: firmware bits0-23, split-link restarts (saturating) in bits24-31. */
+    uint32_t packed[13];memcpy(packed,schedule_schema,sizeof packed);
+    diagnostic_cc_error=0xAB050402U;link.restarts=2U;packed[6]=0x02050402U;verify(0x43,packed);
+    link.restarts=300U;packed[6]=0xFF050402U;verify(0x43,packed);
+    diagnostic_cc_error=2U;link.restarts=0U;
+    assert(link_reads==4&&time_reads==5);link_reads=2;time_reads=3;
     uint8_t q[64],r[64];
     for(unsigned op=0;op<256;op++){
         if(op==0x40||op==0x41||op==0x42||op==0x43)continue;

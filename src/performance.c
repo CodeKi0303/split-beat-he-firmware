@@ -111,7 +111,8 @@ bool performance_command(const uint8_t q[64],uint8_t r[64])
         }else{
             split_link_stats_t link;split_link_stats(&link);
             uint32_t local[13]={board_micros(),main_loops,main_loop_gap_max_us,
-                source_updates[0],source_updates[1],diagnostic_cc_state,diagnostic_cc_error,
+                source_updates[0],source_updates[1],diagnostic_cc_state,
+                (diagnostic_cc_error&0x00ffffffU)|((link.restarts>0xffU?0xffU:link.restarts)<<24),
                 link.flags,link.rx_bytes,link.uart_irq_max_cycles,link.poll_irq_max_cycles,
                 link.uart_irqs,link.poll_irqs};
             memcpy(values,local,sizeof values);

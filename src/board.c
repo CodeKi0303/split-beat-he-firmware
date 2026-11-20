@@ -252,6 +252,7 @@ bool board_local_snapshot(c77_sample_t *out)
 bool board_remote_snapshot(c77_sample_t *out) {return split_link_snapshot(out);}
 void board_service(void)
 {
+    split_link_service();
 #if ROLE_LEFT
 #if HARDWARE_CC_FUSB303B
     board_cc_service();

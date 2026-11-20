@@ -12,6 +12,7 @@ static volatile uint8_t rx_dma[RX_SIZE] __attribute__((section(".dma_buffer"),al
 static uint8_t tx_dma[64] __attribute__((section(".dma_buffer"),aligned(32)));
 static uint32_t tail;
 static volatile bool active,allowed,transmitting;
+static bool running;
 static volatile uint32_t errors;
 static volatile split_link_stats_t link_diagnostics;
 static c77_split_parser_t parser;
@@ -41,6 +42,15 @@ static void abort_tx(void)
 {
     USART3->CR1&=~USART_CR1_TCIE;USART3->CR3&=~USART_CR3_DMAT;
     DMA1_Stream1->CR&=~DMA_SxCR_EN;
+    /* Disabling a running stream sets TCIF1 with NDTR nonzero. Wait (bounded)
+     * until the stream reports disabled and clear its flags, so the stream IRQ
+     * does not take this deliberate abort for a fatal DMA error and stop the
+     * link until reboot. A stream that does not stop keeps its flags and is
+     * still handled as an error. */
+    uint32_t start=DWT->CYCCNT;
+    while((DMA1_Stream1->CR&DMA_SxCR_EN)&&DWT->CYCCNT-start<C77_CPU_HZ/100000U) __NOP();
+    if(!(DMA1_Stream1->CR&DMA_SxCR_EN))
+        DMA1->LIFCR=DMA_LIFCR_CFEIF1|DMA_LIFCR_CDMEIF1|DMA_LIFCR_CTEIF1|DMA_LIFCR_CHTIF1|DMA_LIFCR_CTCIF1;
     transmitting=false;update_tx=false;update_tx_ok=false;
     receive_mode();
 }
@@ -261,12 +271,34 @@ void split_link_start(void)
     TIM4->CR1=0;TIM4->PSC=119U;TIM4->ARR=124U;TIM4->CNT=0;
     TIM4->EGR=TIM_EGR_UG;TIM4->SR=0;TIM4->DIER=TIM_DIER_UIE;
     HAL_NVIC_SetPriority(TIM4_IRQn,2,0);HAL_NVIC_EnableIRQ(TIM4_IRQn);
-    active=true;receive_mode();
+    active=true;running=true;receive_mode();
 #if ROLE_LEFT
     next_sequence=0;awaiting=false;have_sequence=false;TIM4->CR1=TIM_CR1_CEN;
 #else
     reply_pending=false;
 #endif
+}
+static bool inactive_seen;
+static uint32_t inactive_at;
+void split_link_service(void)
+{
+    /* A fatal RX/TX DMA error clears active and nothing else restarts the link,
+     * so the master stops polling (or the satellite stops replying) until a
+     * reboot. Restart it after 10 ms, keeping the allow state and cumulative
+     * diagnostics. Maintenance transport is left alone. */
+    if(!running||active||update_mode) {inactive_seen=false;return;}
+    uint32_t now=board_micros();
+    if(!inactive_seen) {inactive_seen=true;inactive_at=now;return;}
+    if((uint32_t)(now-inactive_at)<10000U) return;
+    bool was_allowed=allowed;
+    split_link_stats_t saved;
+    memcpy(&saved,(const void *)&link_diagnostics,sizeof saved);
+    split_link_stop();split_link_start();
+    saved.restarts++;
+    uint32_t old=__get_BASEPRI();__set_BASEPRI_MAX(2U<<(8U-__NVIC_PRIO_BITS));__DSB();__ISB();
+    memcpy((void *)&link_diagnostics,&saved,sizeof saved);
+    __set_BASEPRI(old);
+    if(was_allowed) split_link_allow(true);
 }
 void split_link_allow(bool enable)
 {
@@ -330,7 +362,7 @@ bool split_link_snapshot(c77_sample_t *out)
 }
 void split_link_stop(void)
 {
-    split_link_allow(false);active=false;
+    split_link_allow(false);active=false;running=false;
     TIM4->CR1=0;TIM4->DIER=0;TIM4->SR=0;
     HAL_NVIC_DisableIRQ(TIM4_IRQn);HAL_NVIC_DisableIRQ(USART3_IRQn);
     HAL_NVIC_DisableIRQ(DMA1_Stream0_IRQn);HAL_NVIC_DisableIRQ(DMA1_Stream1_IRQn);

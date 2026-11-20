@@ -42,7 +42,7 @@
     "poll_interval_us": 10000,
     "transaction_timeout_us": 5000,
     "max_cached_status_us": 20000,
-    "fault_recovery": "Latch off until upstream USB unconfiguration, then complete reinitialization",
+    "fault_recovery": "Keep the downstream supply blocked and the FUSB303B disabled for 1 s, then completely reinitialize; load-switch faults are retried at most 3 times per USB session and then latch until upstream USB unconfiguration",
     "datasheet": "https://www.onsemi.com/pdf/datasheet/fusb303b-d.pdf",
     "datasheet_revision": "September 2024 Rev 3"
   },

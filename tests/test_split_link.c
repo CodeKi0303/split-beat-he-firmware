@@ -187,6 +187,20 @@ static void test_aborts_never_become_ack(void)
     reset();assert(split_update_send(packet));dma_done();split_link_allow(false);uart_done(0);
     assert(split_update_tx_idle() && !split_update_tx_succeeded());
 }
+static void test_abort_is_not_dma_error(void)
+{
+    /* Power removal (allow false) during a running transmit disables the TX
+     * stream, which sets TCIF1 with NDTR nonzero. The abort must clear that
+     * flag so the stream IRQ does not stop the link until reboot. */
+    uint8_t packet[64];firmware_packet(packet);
+    reset();assert(split_update_send(packet));
+    assert((stream1.CR&DMA_SxCR_EN)&&stream1.NDTR==64U);
+    dma.LIFCR=0;split_link_allow(false);
+    assert(!(stream1.CR&DMA_SxCR_EN)&&(dma.LIFCR&DMA_LIFCR_CTCIF1)&&!transmitting);
+    dma.LISR=0;DMA1_Stream1_IRQHandler();
+    assert(active&&link_diagnostics.tx_fail==0U&&errors==0U);
+    split_link_allow(true);assert(allowed&&active);
+}
 static void test_mode_switch_and_reply_guard(void)
 {
     uint8_t packet[64];firmware_packet(packet);reset();
@@ -228,7 +242,7 @@ static void test_scheduling_diagnostics(void)
 int main(void)
 {
     test_frame_boundaries();test_dma_is_not_wire_ack();test_aborts_never_become_ack();
-    test_mode_switch_and_reply_guard();test_scheduling_diagnostics();
+    test_abort_is_not_dma_error();test_mode_switch_and_reply_guard();test_scheduling_diagnostics();
     printf("C86 %s split link: frame boundary, DMA vs TC, abort, quiet transition and receive guard passed\n",
            ROLE_LEFT?"left":"right");
     return 0;

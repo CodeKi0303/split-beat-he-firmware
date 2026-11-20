@@ -13,31 +13,40 @@ static const operation initialize[]={
     {5,0x2b,true}, /* explicit CONTROL1.ENABLE */
     {4,0x42,true}  /* unmask interrupts after configuration */
 };
-static void fail(cc_fusb303b *cc,const cc_io *io,cc_error error)
+static void fail(cc_fusb303b *cc,const cc_io *io,cc_error error,uint32_t now)
 {
     io->cancel(io->context);
     cc->state=CC_FAULT;cc->error=error;cc->pending=false;
     cc->enable=false;cc->allow_power=false;cc->attached=false;
+    cc->fault_at=now;cc->last_error=(uint8_t)error;
+}
+/* Full reinitialization that keeps the boot-lifetime fault evidence. */
+static void restart(cc_fusb303b *cc,const cc_io *io,bool keep_power_retries)
+{
+    uint8_t last=cc->last_error,retries=cc->retries,power=cc->power_retries;
+    cc_fusb303b_reset(cc,io);
+    cc->last_error=last;cc->retries=retries;
+    if(keep_power_retries) cc->power_retries=power;
 }
 void cc_fusb303b_reset(cc_fusb303b *cc,const cc_io *io)
 {
     io->cancel(io->context);
     memset(cc,0,sizeof *cc);
 }
-static bool result_valid(cc_fusb303b *cc,const cc_io *io,uint8_t reg,uint8_t value)
+static bool result_valid(cc_fusb303b *cc,const cc_io *io,uint8_t reg,uint8_t value,uint32_t now)
 {
     if((reg==1&&value!=0x10U)||(reg==2&&value!=3U)) {
-        fail(cc,io,CC_ERROR_ID);return false;
+        fail(cc,io,CC_ERROR_ID,now);return false;
     }
     if(cc->state==CC_READBACK &&
        ((reg==3&&(value&0x7fU)!=0x41U)||(reg==4&&value!=0x42U)||(reg==5&&value!=0x2bU))) {
         /* Detect reset/BOR or accidental mode/current changes before releasing power. */
-        fail(cc,io,CC_ERROR_CONFIG);return false;
+        fail(cc,io,CC_ERROR_CONFIG,now);return false;
     }
     if((reg==0x11&&((value&0x80U)||(value&0x30U)==0x30U)) ||
        (reg==0x12&&(value&3U)) || (reg==0x14&&(value&0x28U)) ||
        (reg==0x15&&(value&0x6fU))) {
-        fail(cc,io,CC_ERROR_STATUS);return false;
+        fail(cc,io,CC_ERROR_STATUS,now);return false;
     }
     return true;
 }
@@ -45,11 +54,23 @@ void cc_fusb303b_service(cc_fusb303b *cc,const cc_io *io,uint32_t now,
     bool configured,bool fault,bool id_low,bool interrupt_low)
 {
     if(!configured) {
-        if(cc->state!=CC_OFF) cc_fusb303b_reset(cc,io);
+        if(cc->state!=CC_OFF||cc->power_retries) restart(cc,io,false);
         return;
     }
-    if(cc->state==CC_FAULT) return; /* latch until upstream unconfiguration */
-    if(fault) {fail(cc,io,CC_ERROR_POWER);return;}
+    if(cc->state==CC_FAULT) {
+        /* Supply blocked and FUSB303B disabled since fail(). Retry instead of
+         * latching until a USB replug: a transient during host boot or resume
+         * must not leave the right half unpowered while the host stays
+         * configured. Repeated load-switch faults still latch. */
+        if((uint32_t)(now-cc->fault_at)<CC_RETRY_US) return;
+        if(cc->error==CC_ERROR_POWER) {
+            if(cc->power_retries>=CC_POWER_RETRIES) return;
+            ++cc->power_retries;
+        }
+        if(cc->retries!=0xffU) ++cc->retries;
+        restart(cc,io,true);
+    }
+    if(fault) {fail(cc,io,CC_ERROR_POWER,now);return;}
     if(!id_low) {cc->allow_power=false;cc->attached=false;}
     if(cc->state==CC_OFF) {
         cc->enable=true;cc->state=CC_STARTING;cc->started_at=now;return;
@@ -64,22 +85,22 @@ void cc_fusb303b_service(cc_fusb303b *cc,const cc_io *io,uint32_t now,
     }
     /* A late/stalled main loop cannot keep an old positive attach decision. */
     if(cc->allow_power&&(uint32_t)(now-cc->checked_at)>20000U) {
-        fail(cc,io,CC_ERROR_TIMEOUT);return;
+        fail(cc,io,CC_ERROR_TIMEOUT,now);return;
     }
     if(cc->pending) {
         cc_io_result result=io->poll(io->context);
-        if(result==CC_IO_ERROR) {fail(cc,io,CC_ERROR_BUS);return;}
+        if(result==CC_IO_ERROR) {fail(cc,io,CC_ERROR_BUS,now);return;}
         if(result==CC_IO_BUSY) {
-            if((uint32_t)(now-cc->transaction_at)>=5000U) fail(cc,io,CC_ERROR_TIMEOUT);
+            if((uint32_t)(now-cc->transaction_at)>=5000U) fail(cc,io,CC_ERROR_TIMEOUT,now);
             return;
         }
         cc->pending=false;
         if(cc->state==CC_INIT) {
             if(!initialize[cc->step].write &&
-               !result_valid(cc,io,initialize[cc->step].reg,cc->value)) return;
+               !result_valid(cc,io,initialize[cc->step].reg,cc->value,now)) return;
             if(++cc->step==sizeof initialize/sizeof initialize[0]) {cc->state=CC_READBACK;cc->step=0;}
         } else if(cc->state==CC_READBACK) {
-            if(!result_valid(cc,io,read_regs[cc->step],cc->value)) return;
+            if(!result_valid(cc,io,read_regs[cc->step],cc->value,now)) return;
             cc->registers[cc->step]=cc->value;
             if(++cc->step==sizeof read_regs) {cc->state=CC_CLEAR;cc->step=0;}
         } else if(cc->state==CC_CLEAR && ++cc->step==2U) {
@@ -97,6 +118,6 @@ void cc_fusb303b_service(cc_fusb303b *cc,const cc_io *io,uint32_t now,
         operation op=initialize[cc->step];reg=op.reg;write=op.write;cc->value=op.value;
     } else if(cc->state==CC_READBACK) {reg=read_regs[cc->step];cc->value=0;}
     else {reg=(uint8_t)(0x14U+cc->step);write=true;cc->value=cc->registers[8U+cc->step]&(cc->step?0x6fU:0x7fU);}
-    if(!io->start(io->context,write,reg,&cc->value)) {fail(cc,io,CC_ERROR_BUS);return;}
+    if(!io->start(io->context,write,reg,&cc->value)) {fail(cc,io,CC_ERROR_BUS,now);return;}
     cc->transaction_at=now;cc->pending=true;
 }

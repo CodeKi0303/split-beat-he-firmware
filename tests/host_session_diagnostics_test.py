@@ -393,7 +393,11 @@ class DiagnosticsTests(unittest.TestCase):
     def test_scheduler_diagnostics_wire_and_gate(self):
         values = (0xfffffffe, 2, 30, 4, 5, 6, 7, 15, 9, 10, 11, 12, 13)
         payload = struct.pack("<13I", *values)
-        self.assertEqual(decode_scheduler_diagnostics(payload), dict(zip(SCHEDULER_FIELDS, values)))
+        derived = {"cc_current_error": 7, "cc_last_error": 0, "cc_retries": 0, "link_restarts": 0}
+        self.assertEqual(decode_scheduler_diagnostics(payload), {**dict(zip(SCHEDULER_FIELDS, values)), **derived})
+        packed = list(values); packed[6] = 0x02050402
+        self.assertEqual({key: decode_scheduler_diagnostics(struct.pack("<13I", *packed))[key] for key in derived},
+                         {"cc_current_error": 2, "cc_last_error": 4, "cc_retries": 5, "link_restarts": 2})
         for size in (0, 48, 51, 53, 56):
             with self.assertRaises(ValueError): decode_scheduler_diagnostics(bytes(size))
         bad = list(values); bad[7] = 16

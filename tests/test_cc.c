@@ -64,7 +64,7 @@ static void until_fault(void)
     assert(cc.state==CC_FAULT&&!cc.allow_power&&!cc.enable);
     unsigned starts=bus.starts;
     for(unsigned i=0;i<10;++i) step(1000);
-    assert(cc.state==CC_FAULT&&bus.starts==starts); /* no auto retry */
+    assert(cc.state==CC_FAULT&&bus.starts==starts); /* no retry before CC_RETRY_US */
 }
 int main(void)
 {
@@ -114,6 +114,37 @@ int main(void)
     reset_model(0xffff0000U);until_ready();assert(cc.allow_power);
     for(unsigned i=0;i<100;++i) step(600);
     assert(cc.state!=CC_FAULT&&cc.allow_power);
-    puts("FUSB303B source policy PASS: startup, readback, bus failures, reset, unsafe attach, power budget, timeout, wrap. No hardware qualification.");
+    /* A transient fault is retried after CC_RETRY_US with the supply blocked,
+     * keeping the boot-lifetime evidence; it no longer needs a USB replug. */
+    reset_model(0);configured=true;bus.error_at=3;until_fault();
+    assert(cc.error==CC_ERROR_BUS&&cc.last_error==CC_ERROR_BUS&&cc.retries==0);
+    bus.error_at=0;step(CC_RETRY_US-20000U);assert(cc.state==CC_FAULT&&!cc.enable);
+    step(20000U);assert(cc.state==CC_STARTING&&cc.enable&&!cc.allow_power);
+    assert(cc.error==CC_ERROR_NONE&&cc.last_error==CC_ERROR_BUS&&cc.retries==1);
+    until_ready();assert(cc.allow_power&&cc.retries==1&&cc.last_error==CC_ERROR_BUS);
+    /* Status/config/timeout faults retry the same way and are counted. */
+    reset_model(0);until_ready();step(20001);assert(cc.error==CC_ERROR_TIMEOUT);
+    step(CC_RETRY_US);until_ready();assert(cc.allow_power&&cc.retries==1&&cc.last_error==CC_ERROR_TIMEOUT);
+    /* A persistent load-switch fault is retried CC_POWER_RETRIES times, then
+     * latches until upstream unconfiguration; the counters survive that. */
+    reset_model(0);until_ready();fault=true;step(0);assert(cc.error==CC_ERROR_POWER);
+    for(unsigned i=1;i<=CC_POWER_RETRIES;++i) {
+        step(CC_RETRY_US);
+        assert(cc.state==CC_FAULT&&cc.error==CC_ERROR_POWER&&!cc.allow_power&&!cc.enable);
+        assert(cc.power_retries==i&&cc.retries==i);
+    }
+    unsigned latched_starts=bus.starts;fault=false;
+    for(unsigned i=0;i<3U;++i) step(CC_RETRY_US);
+    assert(cc.state==CC_FAULT&&cc.retries==CC_POWER_RETRIES&&bus.starts==latched_starts);
+    configured=false;step(0);
+    assert(cc.state==CC_OFF&&cc.power_retries==0&&cc.retries==CC_POWER_RETRIES&&cc.last_error==CC_ERROR_POWER);
+    until_ready();assert(cc.allow_power);
+    /* A load-switch fault that clears is powered again after one retry. */
+    reset_model(0);until_ready();fault=true;step(0);fault=false;step(CC_RETRY_US);
+    assert(cc.state==CC_STARTING&&cc.power_retries==1);until_ready();assert(cc.allow_power);
+    /* The retry counter saturates. */
+    reset_model(0);until_ready();cc.retries=0xffU;bus.regs[5]=0x23;until_fault();
+    bus.regs[5]=0x2b;step(CC_RETRY_US);assert(cc.retries==0xffU);
+    puts("FUSB303B source policy PASS: startup, readback, bus failures, reset, unsafe attach, power budget, timeout, wrap, 1 s fault retry, load-switch retry limit. No hardware qualification.");
     return 0;
 }

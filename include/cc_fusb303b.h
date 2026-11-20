@@ -17,10 +17,20 @@ typedef enum { CC_ERROR_NONE, CC_ERROR_POWER, CC_ERROR_BUS, CC_ERROR_TIMEOUT,
 typedef struct {
     cc_state state;
     cc_error error;
-    uint32_t started_at,transaction_at,checked_at;
+    uint32_t started_at,transaction_at,checked_at,fault_at;
     uint8_t step,value,registers[10];
     bool pending,enable,allow_power,attached;
+    /* Since cc_fusb303b_reset (boot): kept across USB unconfiguration and retries. */
+    uint8_t last_error,retries;
+    /* Load-switch fault retries in this USB session. */
+    uint8_t power_retries;
 } cc_fusb303b;
+/* A fault keeps the downstream supply blocked and the FUSB303B disabled for
+ * CC_RETRY_US, then reinitializes it. A load-switch fault is retried at most
+ * CC_POWER_RETRIES times per USB session and then latches until upstream USB
+ * unconfiguration. */
+#define CC_RETRY_US 1000000U
+#define CC_POWER_RETRIES 3U
 void cc_fusb303b_reset(cc_fusb303b *cc,const cc_io *io);
 /* configured grants only the existing upstream USB budget, never 1.5/3 A.
  * id_low is the hardware ID pin; fault is the external load-switch fault. */
