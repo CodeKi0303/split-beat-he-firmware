@@ -4,7 +4,7 @@
 #include "adc_async.h"
 _Static_assert(SCAN_ADC_ASYNC && (SCAN_TARGET_HZ==64000U || SCAN_TARGET_HZ==96000U) && SCAN_ADC_BITS==12U &&
                SCAN_ADC_EFFECTIVE_HZ==40000000U && SCAN_ADC1_RANKS==(SCAN_ADC_PHASE_PAIR ? 8U : 4U) &&
-               SCAN_ADC2_RANKS==(SCAN_ADC_PHASE_PAIR ? 5U : 3U),
+               SCAN_ADC2_RANKS==(SCAN_ADC_PHASE_PAIR ? 6U : 3U),
                "Async ADC requires a supported C86 matched40 rank layout");
 _Static_assert(C77_CPU_HZ%SCAN_TARGET_HZ==0U,"Async DWT timing requires an exact scan period");
 #define ASYNC_RING_SCANS 32U
@@ -72,7 +72,9 @@ static unsigned ranks_for(unsigned unit) {return unit==0U?SCAN_ADC1_RANKS:SCAN_A
 typedef struct {uint8_t first,second;} adc_rank_pair;
 /* Keep physical acquisition slots separate from logical calibration/STATUS
  * keys. Left interleaves ADC1 and separates Shift's pair; right keeps its
- * qualified adjacent pairs. Runtime rates/filters share these same maps. */
+ * qualified adjacent pairs. ADC2 key 0 (left F, right J) pairs its long
+ * first rank with a sixth rank instead of using one conversion per scan.
+ * Runtime rates/filters share these same maps. */
 static const uint8_t adc_rank_keys[2][8]={
 #if ROLE_LEFT
     {0U,1U,2U,3U,0U,1U,2U,3U},
@@ -85,10 +87,10 @@ static const uint8_t adc_rank_keys[2][8]={
 static const adc_rank_pair adc_key_ranks[2][4]={
 #if ROLE_LEFT
     {{0U,4U},{1U,5U},{2U,6U},{3U,7U}},
-    {{0U,0U},{1U,4U},{2U,3U},{0U,0U}}
+    {{0U,5U},{1U,4U},{2U,3U},{0U,0U}}
 #else
     {{0U,1U},{2U,3U},{4U,5U},{6U,7U}},
-    {{0U,0U},{1U,2U},{3U,4U},{0U,0U}}
+    {{0U,5U},{1U,2U},{3U,4U},{0U,0U}}
 #endif
 };
 #endif
@@ -277,15 +279,13 @@ bool adc_scan_bank_snapshot(unsigned unit,c77_sample_t *out)
     }
     for(unsigned key=0;key<key_count;key++) {
 #if SCAN_ADC_PHASE_PAIR
-        if(unit==0U || key!=0U) {
-            const adc_rank_pair pair=adc_key_ranks[unit][key];
-            sample.raw[first+key]=(uint16_t)((history[latest][pair.first]+history[latest][pair.second]+1U)/2U);
-            sample.hall_filtered[first+key]=(uint16_t)((rank_sums[pair.first]+rank_sums[pair.second]+frames)/(2U*frames));
-            continue;
-        }
-#endif
+        const adc_rank_pair pair=adc_key_ranks[unit][key];
+        sample.raw[first+key]=(uint16_t)((history[latest][pair.first]+history[latest][pair.second]+1U)/2U);
+        sample.hall_filtered[first+key]=(uint16_t)((rank_sums[pair.first]+rank_sums[pair.second]+frames)/(2U*frames));
+#else
         sample.raw[first+key]=history[latest][key];
         sample.hall_filtered[first+key]=(uint16_t)((rank_sums[key]+frames/2U)/frames);
+#endif
     }
     sample.sequence=sequence;sample.timestamp_us=observed_us;
     sample.valid=sample.hall_filtered_valid=1U;

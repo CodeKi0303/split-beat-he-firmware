@@ -175,23 +175,22 @@ static void check_mean(unsigned unit,const c77_sample_t *sample,uint32_t sequenc
         unsigned frames=8U;
 #if SCAN_ADC_PHASE_PAIR
         frames=active_filter;
-        if(unit==0U || rank>0U) {
-            unsigned a=unit==0U?2U*rank:2U*rank-1U,b=a+1U;
+        unsigned a=unit==0U?2U*rank:2U*rank-1U,b=a+1U;
+        if(unit&&rank==0U){a=0U;b=5U;}
 #if ROLE_LEFT
-            if(unit==0U){a=rank;b=rank+4U;}
-            else {a=rank==1U?1U:2U;b=rank==1U?4U:3U;}
+        if(unit==0U){a=rank;b=rank+4U;}
+        else if(rank){a=rank==1U?1U:2U;b=rank==1U?4U:3U;}
 #endif
-            assert(sample->raw[first+rank]==(value_at(unit,sequence,a)+value_at(unit,sequence,b)+1U)/2U);
-            uint32_t sum=0U;
-            for(unsigned i=0;i<frames;i++)sum+=value_at(unit,sequence-i,a)+value_at(unit,sequence-i,b);
-            assert(sample->hall_filtered[first+rank]==(sum+frames)/(2U*frames));
-            continue;
-        }
-#endif
+        assert(sample->raw[first+rank]==(value_at(unit,sequence,a)+value_at(unit,sequence,b)+1U)/2U);
+        uint32_t sum=0U;
+        for(unsigned i=0;i<frames;i++)sum+=value_at(unit,sequence-i,a)+value_at(unit,sequence-i,b);
+        assert(sample->hall_filtered[first+rank]==(sum+frames)/(2U*frames));
+#else
         uint32_t sum=0U;
         for(unsigned i=0;i<frames;i++)sum+=value_at(unit,sequence-i,rank);
         assert(sample->raw[first+rank]==value_at(unit,sequence,rank));
         assert(sample->hall_filtered[first+rank]==(sum+frames/2U)/frames);
+#endif
     }
     for(unsigned rank=0;rank<7U;rank++)if(rank<first||rank>=first+key_count)
         assert(!sample->raw[rank] && !sample->hall_filtered[rank]);
@@ -299,11 +298,10 @@ static uint16_t average_at(unsigned unit,uint32_t last,unsigned rank)
 static uint16_t satellite_expected(unsigned unit,uint32_t last,unsigned key)
 {
 #if SCAN_ADC_PHASE_PAIR
-    if(unit==0U||key!=0U){
-        const unsigned rank=unit==0U?2U*key:2U*key-1U;
-        return (uint16_t)((value_at(unit,last,rank)+value_at(unit,last,rank+1U)+1U)/2U);
-    }
-    return value_at(unit,last,key);
+    if(unit&&key==0U)
+        return (uint16_t)((value_at(unit,last,0U)+value_at(unit,last,5U)+1U)/2U);
+    const unsigned rank=unit==0U?2U*key:2U*key-1U;
+    return (uint16_t)((value_at(unit,last,rank)+value_at(unit,last,rank+1U)+1U)/2U);
 #else
     return average_at(unit,last,key);
 #endif
@@ -360,7 +358,7 @@ static void test_rank_pair_key_contract(void)
         c77_sample_t sample;assert(snapshot(unit,&sample));
         for(unsigned key=0;key<count;key++){
             const unsigned logical=(unit?4U:0U)+key;
-            assert(seen[key]==(unit&&key==0U?1U:2U));
+            assert(seen[key]==2U);
             assert(sample.raw[logical]==500U+key*900U);
             assert(sample.hall_filtered[logical]==sample.raw[logical]);
             assert(expected[unit][adc_key_ranks[unit][key].first]==key);
