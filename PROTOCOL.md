@@ -267,11 +267,16 @@ and TIM3 with the existing ADC configuration. Both invalidate old engine
 snapshots and clear RT history. The choice lives in
 RAM and is independent of USB polling and the saved calibration profile.
 
-`ADC_COMPARE` takes a u8 local Hall index (0..6). It returns the key index,
-effective window, u32 bank sequence, u16 latest ADC code, u16 moving average
-and u16 post-deadband decision code (12 bytes total). All are little-endian
-and from the same engine snapshot. The latest code for a phase-paired key is
-already the mean of its two conversions within that scan. This is an opt-in
+`ADC_COMPARE` takes a u8 Hall index: 0..6 (left) and, from v0.3.47, 7..13
+(right). It returns the key index, effective window, u32 bank sequence
+(the right S7 sample sequence for 7..13), u16 latest ADC code, u16 moving
+average and u16 post-deadband decision code (12 bytes total). All are
+little-endian and from the same engine snapshot. The latest code for a
+phase-paired key is already the mean of its two conversions within that scan.
+The right half averages before its S7 frame, so for 7..13 the latest and
+average fields both carry that received code; the decision code is the left
+engine's post-deadband value. Firmware before v0.3.47 returns `BAD_INDEX` for
+7..13. This is an opt-in
 read-only snapshot and does not add traffic to the normal S7 link.
 
 `0x49 ADC_PAIR` requires capability `0x10000` and takes the same five-byte

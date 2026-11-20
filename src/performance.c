@@ -45,14 +45,21 @@ bool adc_tuning_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t
     header(q,r,C77_OK);
     if(!update_frame_valid(q)||q[6])r[6]=C77_BAD_PACKET;
     else if(q[3]==ADC_COMPARE_COMMAND){
-        const unsigned key=q[8];
+        /* 0.3.47+: keys 7..13 are the right half. Its S7 frame already carries
+         * the averaged code, so latest and average are that same value there. */
+        const unsigned key=q[8],side=key>=SCAN_ADC_RANKS?1U:0U,local=key-side*SCAN_ADC_RANKS;
         if(q[7]!=1U)r[6]=C77_BAD_PACKET;
-        else if(key>=SCAN_ADC_RANKS)r[6]=C77_BAD_INDEX;
-        else if(!c77_source_fresh(e,0,now))r[6]=C77_NOT_READY;
+        else if(key>=2U*SCAN_ADC_RANKS)r[6]=C77_BAD_INDEX;
+        else if(!c77_source_fresh(e,side,now))r[6]=C77_NOT_READY;
         else{
             r[8]=(uint8_t)key;r[9]=adc_scan_filter();
-            put32(r+10,e->local_bank_sequence[key>=SCAN_ADC1_KEYS]);
-            put16(r+14,e->sample[0].raw[key]);put16(r+16,e->sample[0].hall_filtered[key]);
+            if(side){
+                put32(r+10,e->sample[1].sequence);
+                put16(r+14,e->sample[1].raw[local]);put16(r+16,e->sample[1].raw[local]);
+            }else{
+                put32(r+10,e->local_bank_sequence[key>=SCAN_ADC1_KEYS]);
+                put16(r+14,e->sample[0].raw[key]);put16(r+16,e->sample[0].hall_filtered[key]);
+            }
             put16(r+18,e->filtered[key]);r[7]=12U;
         }
     }else{
