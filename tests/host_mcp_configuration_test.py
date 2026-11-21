@@ -412,6 +412,22 @@ class PointerBindingTests(unittest.TestCase):
             require_binding_capability(record, CAP_MOUSE_BUTTON)
         require_binding_capability(record, CAP_POINTER)
 
+    def test_acceleration_field(self):
+        from host.protocol import (ProtocolError, binding_record, encode_binding, decode_binding,
+                                   require_binding_capability, CAP_POINTER, CAP_POINTER_ACCEL)
+        record = dict(input=20, kind=7, code=-25, modifiers=0, accel=4)
+        self.assertEqual(encode_binding(record), bytes((20, 7, 0xE7, 0xFF, 0, 4)))
+        self.assertEqual(decode_binding(encode_binding(record)), record)
+        self.assertEqual(binding_record({**record, "accel": 0}), dict(input=20, kind=7, code=-25, modifiers=0))
+        for bad in ({"accel": 16}, {"input": 4}):
+            with self.assertRaises(ProtocolError):
+                binding_record({**record, **bad})
+        with self.assertRaises(ProtocolError):
+            require_binding_capability(binding_record(record), CAP_POINTER)
+        require_binding_capability(binding_record(record), CAP_POINTER | CAP_POINTER_ACCEL)
+        with self.assertRaises(ProtocolError):
+            decode_binding(bytes((20, 2, 1, 0, 0, 3)))
+
     def test_label_and_catalog(self):
         from host.mcp_configuration import binding_label, binding_catalog
         self.assertEqual(binding_label(dict(input=0, kind=7, code=800, modifiers=0)), "Pointer Right (800)")
@@ -419,6 +435,8 @@ class PointerBindingTests(unittest.TestCase):
         catalog = binding_catalog()
         self.assertEqual(catalog["kinds"]["7"], "pointer")
         self.assertEqual(catalog["pointer"]["speed_range"], [-4000, 4000])
+        self.assertEqual(catalog["pointer"]["accel"]["range"], [0, 15])
+        self.assertEqual(binding_label(dict(input=20, kind=7, code=20, modifiers=0, accel=4)), "Pointer Right (20, accel 4)")
 
 if __name__ == "__main__":
     unittest.main()

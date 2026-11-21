@@ -18,7 +18,7 @@ from .client import DeviceError
 from .default_bindings import default_bindings
 from .hall_curve import curve_catalog
 from .protocol import (
-    CAP_FINE_TRAVEL, CAP_KEY_CHORD, CAP_POINTER, POINTER_MAX, CAP_RETRIGGER_BEFORE_RELEASE, DEFAULTS, LEGACY_TRAVEL_SCALE, ProtocolError, TRAVEL_MAX,
+    CAP_FINE_TRAVEL, CAP_KEY_CHORD, CAP_POINTER, POINTER_MAX, CAP_POINTER_ACCEL, POINTER_ACCEL_MAX, CAP_RETRIGGER_BEFORE_RELEASE, DEFAULTS, LEGACY_TRAVEL_SCALE, ProtocolError, TRAVEL_MAX,
     binding_record, integer, key_record, require_binding_capability, require_key_capability, validate_profile,
 )
 
@@ -338,7 +338,8 @@ def binding_label(binding):
         return " + ".join(parts) or "미지정"
     if kind == 7:
         axis = ("Right" if binding["code"] > 0 else "Left") if binding["modifiers"] == 0 else             ("Down" if binding["code"] > 0 else "Up")
-        return f"Pointer {axis} ({abs(binding['code'])})"
+        accel = f", accel {binding['accel']}" if binding.get("accel") else ""
+        return f"Pointer {axis} ({abs(binding['code'])}{accel})"
     if kind in (2, 3):
         return ("Scroll " + ("Up" if binding["code"] == 1 else "Down") if kind == 2 else
                 "Scroll " + ("Right" if binding["code"] == 1 else "Left"))
@@ -388,7 +389,9 @@ def binding_catalog():
         scroll_codes={"1": "up/right", "-1": "down/left"},
         pointer={"capability": CAP_POINTER, "axis_in_modifiers": {"0": "X (+right)", "1": "Y (+down)"},
                  "speed_range": [-POINTER_MAX, POINTER_MAX],
-                 "speed_units": "Hall: px/s at full depth; MX: px/s (30%->100% over 350 ms); encoder: px per detent"},
+                 "speed_units": "Hall: px/s at full depth; MX: px/s (30%->100% over 350 ms); encoder: px per detent",
+                 "accel": {"capability": CAP_POINTER_ACCEL, "range": [0, POINTER_ACCEL_MAX], "inputs": [20, 27],
+                           "model": "gain 1 below 5 detents/s, rising linearly to (1+accel)x at 40 detents/s"}},
         notes=["Keyboard usages are USB HID page 0x07, not characters or OS scan codes. OS language/layout affects resulting characters.",
                "Modifier bits are supported in kinds 1 and 6. Kind 6 takes a keys list instead of code. Disabled records require code=0,modifiers=0.",
                "Mouse buttons and Hall/MX press-edge scroll require firmware capability0x20. No text macro or arbitrary input injection is exposed."])

@@ -78,7 +78,7 @@ class DemoTransport:
         if op == INFO:
             if p: raise ProtocolError("length")
             crc = zlib.crc32(b"".join(encode_key(k) for k in self.profile["keys"])+b"".join(encode_binding(b) for b in self.profile["bindings"]))
-            return struct.pack("<8B5IH4B", 0,3,41,0,14,6,4,28,64000,125,0x33f | CAP_KEY_CHORD | CAP_SAVE_OUTPUT | CAP_RETRIGGER_BEFORE_RELEASE | CAP_FINE_TRAVEL | CAP_POINTER, self.generation,crc,1024,86,1,2,bool(self.stored))
+            return struct.pack("<8B5IH4B", 0,3,41,0,14,6,4,28,64000,125,0x33f | CAP_KEY_CHORD | CAP_SAVE_OUTPUT | CAP_RETRIGGER_BEFORE_RELEASE | CAP_FINE_TRAVEL | CAP_POINTER | CAP_POINTER_ACCEL, self.generation,crc,1024,86,1,2,bool(self.stored))
         if op == STATUS:
             if len(p) != 1 or p[0] > 1: raise ProtocolError("side")
             elapsed = time.monotonic()-self.start

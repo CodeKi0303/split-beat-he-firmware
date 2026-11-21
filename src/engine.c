@@ -41,7 +41,23 @@ bool c77_enable_output(c77_engine *e,uint32_t now){
 static void add_scroll(c77_engine *e,int32_t *value,int delta){
     int32_t next=*value+delta;if(next>10000){next=10000;e->pulse_drops++;}if(next< -10000){next=-10000;e->pulse_drops++;}*value=next;
 }
-static void encoder_events(c77_engine *e,unsigned encoder,uint16_t count,bool first){
+/* Encoder pointer detents: base code px each, times an acceleration gain from
+ * the time since this direction's previous detent (see keyboard.h). */
+static void pointer_detents(c77_engine *e,unsigned index,const c77_binding *b,int delta,uint32_t now){
+    uint32_t gain=1000u;
+    const uint32_t dt=now-e->encoder_event_at[index];
+    if(b->third_key&&(e->encoder_event_seen&(1u<<index))&&dt&&dt<200000u){
+        const uint64_t rate=(uint64_t)(uint32_t)delta*1000000000ull/dt; /* detents/s x1000 */
+        const uint32_t t=rate<=5000u?0u:rate>=40000u?1000u:(uint32_t)((rate-5000u)*1000u/35000u);
+        gain+=(uint32_t)b->third_key*t;
+    }
+    e->encoder_event_at[index]=now;e->encoder_event_seen|=(uint8_t)(1u<<index);
+    const int64_t milli=(int64_t)(int16_t)b->code*delta*(int64_t)gain;
+    const unsigned axis=b->modifiers&1u;
+    add_scroll(e,&e->pointer_pending[axis],(int)(milli/1000));
+    e->pointer_frac[axis]+=(int32_t)(milli%1000)*1000;
+}
+static void encoder_events(c77_engine *e,unsigned encoder,uint16_t count,bool first,uint32_t now){
     int delta=(int16_t)(uint16_t)(count-e->encoder_previous[encoder]);e->encoder_previous[encoder]=count;
     if(first||!e->output||!delta)return;
     /* Impossible jumps after reset/noise never create thousands of HID events. */
@@ -49,7 +65,7 @@ static void encoder_events(c77_engine *e,unsigned encoder,uint16_t count,bool fi
     unsigned index=encoder*2+(delta<0?1u:0u);if(delta<0)delta=-delta;
     const c77_binding *b=&e->config.bindings[20+index];
     if(b->kind==2||b->kind==3){add_scroll(e,b->kind==2?&e->wheel_pending:&e->pan_pending,delta*(int16_t)b->code);return;}
-    if(b->kind==C77_BINDING_POINTER){add_scroll(e,&e->pointer_pending[b->modifiers&1u],delta*(int16_t)b->code);return;}
+    if(b->kind==C77_BINDING_POINTER){pointer_detents(e,index,b,delta,now);return;}
     if(!b->kind)return;
     unsigned pending=e->pending[index]+(unsigned)delta;
     if(pending>16){e->pulse_drops+=pending-16;pending=16;}e->pending[index]=(uint8_t)pending;
@@ -175,7 +191,7 @@ void c77_update(c77_engine *e,unsigned side,const c77_sample_t *s,uint32_t now){
     e->sample[side].valid=(uint8_t)update_hall(e,side,s,first,0U,7U);
     update_digital(e,side,s,now,first);
     scroll_press_edges(e,previous_pressed,first);
-    encoder_events(e,side*2,s->encoders[0],first);encoder_events(e,side*2+1,s->encoders[1],first);
+    encoder_events(e,side*2,s->encoders[0],first,now);encoder_events(e,side*2+1,s->encoders[1],first,now);
 }
 #if SCAN_ADC_ASYNC
 bool c77_update_left_bank(c77_engine *e,unsigned bank,const c77_sample_t *s,uint32_t now){
@@ -214,8 +230,8 @@ bool c77_update_left_bank(c77_engine *e,unsigned bank,const c77_sample_t *s,uint
     }
     scroll_press_edges(e,previous_pressed,first);
     if(bank==0U){
-        encoder_events(e,0U,s->encoders[0],first);
-        encoder_events(e,1U,s->encoders[1],first);
+        encoder_events(e,0U,s->encoders[0],first,now);
+        encoder_events(e,1U,s->encoders[1],first,now);
     }
     /* STATUS keeps its whole-side wire format. Use the older bank timestamp
      * so that new data in one bank cannot refresh the other bank. */

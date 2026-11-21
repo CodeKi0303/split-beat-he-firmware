@@ -62,7 +62,8 @@ bool c77_config_valid(const c77_config *cfg){
 #endif
         if(b->kind==C77_BINDING_POINTER){
             const int16_t speed=(int16_t)b->code;
-            if(b->modifiers>1||b->third_key||!speed||speed>C77_POINTER_MAX||speed< -C77_POINTER_MAX)return false;
+            if(b->modifiers>1||b->third_key>C77_POINTER_ACCEL_MAX||(i<20&&b->third_key)||
+               !speed||speed>C77_POINTER_MAX||speed< -C77_POINTER_MAX)return false;
             continue;
         }
         if(b->kind>5||b->third_key)return false;

@@ -305,7 +305,14 @@ nonzero, magnitude 1..4000.
   (0..10000) while the key is pressed.
 - MX/knob-click inputs 14..19: `code` px/s while held, ramping linearly from
   30% to 100% over the first 350 ms.
-- Encoder directions 20..27: `code` px per detent.
+- Encoder directions 20..27: `code` px per detent. From v0.3.49 (capability
+  `0x800000`) the last byte is an acceleration strength A 0..15 (0 = off;
+  other inputs must keep 0). The master times each detent against the same
+  direction's previous one (gaps of 200 ms or more count as slow): at 5
+  detents/s or slower a detent moves `code` px, and the gain rises linearly to
+  (1+A)x at 40 detents/s. Fractions carry into later reports. JSON records add
+  an optional `accel` field, omitted when 0. Firmware 0.3.48 rejects a stored
+  generation with A > 0.
 
 The master integrates motion once per 1 ms mouse report (at most 5 ms per step
 after a stalled loop), carries sub-pixel remainders, clamps each report to

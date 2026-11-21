@@ -273,6 +273,23 @@ static void test_pointer(void){
     fresh(3000);fresh(3000);enable();
     c77_sample_t s=e.sample[0];s.sequence++;s.timestamp_us=now;s.encoders[0]=(uint16_t)(e.encoder_previous[0]+3);
     c77_update(&e,0,&s,now);assert(e.pointer_pending[0]==-21);
+    /* 0.3.49 acceleration: slow detents keep the base, fast ones gain up to (1+A)x. */
+    e.pointer_pending[0]=0;e.pointer_frac[0]=0;
+    e.config.bindings[20]=(c77_binding){.kind=C77_BINDING_POINTER,.code=10,.third_key=4};
+    assert(c77_config_valid(&e.config));
+    const uint32_t gaps[]={500000u,250000u,10000u,50000u};
+    const int32_t expected[]={10,10,50,27};
+    for(unsigned n=0;n<4;n++){
+        for(unsigned step=0;step<gaps[n];step+=4000u){now+=step+4000u<=gaps[n]?4000u:gaps[n]-step;fresh(3000);}
+        e.pointer_pending[0]=0;e.pointer_frac[0]=0;
+        c77_sample_t a=e.sample[0];a.sequence++;a.timestamp_us=now;a.encoders[0]=(uint16_t)(e.encoder_previous[0]+1);
+        c77_update(&e,0,&a,now);
+        assert(e.pointer_pending[0]==expected[n]);
+    }
+    assert(e.pointer_frac[0]==120000); /* 20 detents/s: gain 2.712 -> 27.12 px */
+    c77_config bad=e.config;bad.bindings[20].third_key=16;assert(!c77_config_valid(&bad));
+    bad=e.config;bad.bindings[0].third_key=1;assert(!c77_config_valid(&bad)); /* Hall: no detents */
+    e.config.bindings[20]=(c77_binding){.kind=C77_BINDING_POINTER,.code=(uint16_t)-7};
     /* No retrigger pulse or keyboard usage for pointer bindings. */
     uint8_t keys[32];uint16_t consumer;e.pressed_mask=1u;c77_report(&e,keys,&consumer);
     for(unsigned i=0;i<32;i++)assert(!keys[i]);

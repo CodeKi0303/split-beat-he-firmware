@@ -16,8 +16,12 @@ enum { C77_CAP_CUSTOM_CURVE=0x200000, C77_OP_CUSTOM_CURVE=0x4C, C77_CURVE_BYTES=
 /* 0.3.48+: kind 7 moves the mouse pointer. modifiers = axis (0 X, 1 Y);
  * code = signed speed. Hall keys: px/s at full depth, scaled by the reported
  * travel. MX/knob-click inputs: px/s, ramping from 30% to 100% over 350 ms.
- * Encoder directions: px per detent. */
-enum { C77_BINDING_POINTER=7, C77_CAP_POINTER=0x400000, C77_POINTER_MAX=4000 };
+ * Encoder directions: px per detent.
+ * 0.3.49+: on encoder directions the last byte (third_key) is an acceleration
+ * strength A 0..15: below 5 detents/s each detent moves code px; the gain then
+ * rises linearly to (1+A)x at 40 detents/s. Other inputs keep it 0. */
+enum { C77_BINDING_POINTER=7, C77_CAP_POINTER=0x400000, C77_POINTER_MAX=4000,
+       C77_CAP_POINTER_ACCEL=0x800000, C77_POINTER_ACCEL_MAX=15 };
 typedef struct { uint16_t released,pressed,actuation,rt_press,rt_release,top_deadzone,noise,bottom_deadzone,curve_id; uint8_t flags; } c77_key_config;
 /* Chords pack the first two usages into code, low byte first. A zero
  * third_key means the chord has two ordinary keys. */
@@ -57,6 +61,9 @@ typedef struct {
      * remainder in 1e-6 px, last tick time and press start of held inputs. */
     int32_t pointer_pending[2],pointer_frac[2];
     uint32_t pointer_last,pointer_held,pointer_since[20];
+    /* Previous detent time per encoder direction for pointer acceleration. */
+    uint32_t encoder_event_at[8];
+    uint8_t encoder_event_seen;
     uint8_t retrigger[C77_HALL];
     uint16_t retrigger_mask;
     uint32_t retrigger_epoch, retrigger_since[C77_HALL], retrigger_tag[C77_HALL];
