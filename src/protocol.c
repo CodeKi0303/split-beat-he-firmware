@@ -41,7 +41,7 @@ bool c77_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t now,ui
     case 1:
         out[0]=(uint8_t)((FW_UPDATE_VERSION>>24)&255U);out[1]=(uint8_t)((FW_UPDATE_VERSION>>16)&255U);out[2]=(uint8_t)(FW_UPDATE_VERSION&255U);
         out[3]=0;out[4]=14;out[5]=6;out[6]=4;out[7]=28;p32(out+8,SCAN_TARGET_HZ);p32(out+12,speed==2?125:1000);
-        uint32_t capabilities=(HARDWARE_REVISION==86?0x3ffu:0x33fu)|C77_CAP_SAVE_OUTPUT|C77_CAP_FINE_TRAVEL|C77_CAP_CUSTOM_CURVE;
+        uint32_t capabilities=(HARDWARE_REVISION==86?0x3ffu:0x33fu)|C77_CAP_SAVE_OUTPUT|C77_CAP_FINE_TRAVEL|C77_CAP_CUSTOM_CURVE|C77_CAP_POINTER;
 #if SCAN_ADC_PHASE_PAIR
         p32(out+8,adc_scan_rate());
         capabilities|=C77_CAP_ADC_TUNING|C77_CAP_ADC_PAIR|C77_CAP_ADC_PAIR_READ;

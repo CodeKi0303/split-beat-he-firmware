@@ -14,6 +14,7 @@ void c77_engine_init(c77_engine *e,const c77_config *cfg,uint32_t generation,boo
 }
 void c77_disable(c77_engine *e){
     e->output=0;e->pressed_mask=0;e->wheel_pending=e->pan_pending=0;
+    e->pointer_pending[0]=e->pointer_pending[1]=e->pointer_frac[0]=e->pointer_frac[1]=0;e->pointer_held=0;
     memset(e->pending,0,sizeof e->pending);memset(e->pulse,0,sizeof e->pulse);
     memset(e->retrigger,0,sizeof e->retrigger);e->retrigger_mask=0;++e->retrigger_epoch;
     for(unsigned i=0;i<C77_HALL;i++)rt_key_reset(&e->keys[i]);
@@ -48,6 +49,7 @@ static void encoder_events(c77_engine *e,unsigned encoder,uint16_t count,bool fi
     unsigned index=encoder*2+(delta<0?1u:0u);if(delta<0)delta=-delta;
     const c77_binding *b=&e->config.bindings[20+index];
     if(b->kind==2||b->kind==3){add_scroll(e,b->kind==2?&e->wheel_pending:&e->pan_pending,delta*(int16_t)b->code);return;}
+    if(b->kind==C77_BINDING_POINTER){add_scroll(e,&e->pointer_pending[b->modifiers&1u],delta*(int16_t)b->code);return;}
     if(!b->kind)return;
     unsigned pending=e->pending[index]+(unsigned)delta;
     if(pending>16){e->pulse_drops+=pending-16;pending=16;}e->pending[index]=(uint8_t)pending;
@@ -126,7 +128,7 @@ static inline bool update_hall(c77_engine *e,unsigned side,const c77_sample_t *s
             const c77_binding *b=&e->config.bindings[i];
             if(b->kind==2||b->kind==3)
                 add_scroll(e,b->kind==2?&e->wheel_pending:&e->pan_pending,(int16_t)b->code);
-            else if(b->kind){
+            else if(b->kind&&b->kind!=C77_BINDING_POINTER){
                 if(e->retrigger[i])e->pulse_drops++;
                 else {e->retrigger[i]=1;e->retrigger_mask|=(uint16_t)(1u<<i);e->retrigger_tag[i]=++e->retrigger_epoch;e->retrigger_since[i]=s->timestamp_us;}
             }
@@ -324,6 +326,37 @@ void c77_mouse_peek(const c77_engine *e,int8_t *wheel,int8_t *pan){
     int32_t w=e->output?e->wheel_pending:0,p=e->output?e->pan_pending:0;
     *wheel=(int8_t)(w>127?127:w< -127?-127:w);*pan=(int8_t)(p>127?127:p< -127?-127:p);
 }
+void c77_pointer_tick(c77_engine *e,uint32_t now){
+    uint32_t dt=now-e->pointer_last;e->pointer_last=now;
+    if(dt>5000u)dt=5000u; /* A stalled loop never produces a jump. */
+    if(!e->output){e->pointer_held=0;return;}
+    for(unsigned i=0;i<20;i++){
+        const c77_binding *b=&e->config.bindings[i];
+        const uint32_t bit=1u<<i;
+        if(b->kind!=C77_BINDING_POINTER||!(e->pressed_mask&bit)){e->pointer_held&=~bit;continue;}
+        if(!(e->pointer_held&bit)){e->pointer_held|=bit;e->pointer_since[i]=now;}
+        int32_t speed=(int16_t)b->code;
+        if(i<C77_HALL)speed=speed*(int32_t)e->travel[i]/RT_TRAVEL_MAX;
+        else{
+            uint32_t held=now-e->pointer_since[i];if(held>350000u)held=350000u;
+            speed=speed*(int32_t)(300u+held*700u/350000u)/1000;
+        }
+        e->pointer_frac[b->modifiers&1u]+=speed*(int32_t)dt;
+    }
+    for(unsigned axis=0;axis<2;axis++){
+        const int32_t whole=e->pointer_frac[axis]/1000000;
+        if(whole){add_scroll(e,&e->pointer_pending[axis],whole);e->pointer_frac[axis]-=whole*1000000;}
+    }
+}
+void c77_pointer_peek(const c77_engine *e,int8_t *x,int8_t *y){
+    int32_t v[2];
+    for(unsigned axis=0;axis<2;axis++){
+        const int32_t p=e->output?e->pointer_pending[axis]:0;
+        v[axis]=p>127?127:p< -127?-127:p;
+    }
+    *x=(int8_t)v[0];*y=(int8_t)v[1];
+}
+void c77_pointer_accepted(c77_engine *e,int8_t x,int8_t y){e->pointer_pending[0]-=x;e->pointer_pending[1]-=y;}
 uint8_t c77_mouse_buttons(const c77_engine *e){
     uint8_t buttons=0;if(!e->output)return 0;
     for(unsigned i=0;i<28;i++){

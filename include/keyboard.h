@@ -13,6 +13,11 @@ enum { C77_CAP_ADC_TUNING=0x8000,C77_CAP_ADC_PAIR=0x10000,C77_CAP_ADC_PAIR_READ=
 enum { C77_CAP_FINE_TRAVEL=0x80000 };
 /* 0.3.46+: curve_id 2 and command 0x4C read/write the shared custom curve. */
 enum { C77_CAP_CUSTOM_CURVE=0x200000, C77_OP_CUSTOM_CURVE=0x4C, C77_CURVE_BYTES=2*RT_CUSTOM_CURVE_POINTS };
+/* 0.3.48+: kind 7 moves the mouse pointer. modifiers = axis (0 X, 1 Y);
+ * code = signed speed. Hall keys: px/s at full depth, scaled by the reported
+ * travel. MX/knob-click inputs: px/s, ramping from 30% to 100% over 350 ms.
+ * Encoder directions: px per detent. */
+enum { C77_BINDING_POINTER=7, C77_CAP_POINTER=0x400000, C77_POINTER_MAX=4000 };
 typedef struct { uint16_t released,pressed,actuation,rt_press,rt_release,top_deadzone,noise,bottom_deadzone,curve_id; uint8_t flags; } c77_key_config;
 /* Chords pack the first two usages into code, low byte first. A zero
  * third_key means the chord has two ordinary keys. */
@@ -48,6 +53,10 @@ typedef struct {
     uint32_t pulse_drops;
     /* One outstanding event/key: 1 await held ACK, 2 release, 3 repress.
      * Epoch tags bind ACKs to actual published phases, never mailbox intent. */
+    /* Pointer motion (kind 7): whole-pixel backlog per axis, sub-pixel
+     * remainder in 1e-6 px, last tick time and press start of held inputs. */
+    int32_t pointer_pending[2],pointer_frac[2];
+    uint32_t pointer_last,pointer_held,pointer_since[20];
     uint8_t retrigger[C77_HALL];
     uint16_t retrigger_mask;
     uint32_t retrigger_epoch, retrigger_since[C77_HALL], retrigger_tag[C77_HALL];
@@ -83,6 +92,10 @@ void c77_consumer_acked(c77_engine *e,uint32_t now);
 void c77_mouse_peek(const c77_engine *e,int8_t *wheel,int8_t *pan);
 uint8_t c77_mouse_buttons(const c77_engine *e);
 void c77_mouse_accepted(c77_engine *e,int8_t wheel,int8_t pan);
+/* Integrate held pointer bindings up to now (call once per mouse report). */
+void c77_pointer_tick(c77_engine *e,uint32_t now);
+void c77_pointer_peek(const c77_engine *e,int8_t *x,int8_t *y);
+void c77_pointer_accepted(c77_engine *e,int8_t x,int8_t y);
 void c77_mouse_acked(c77_engine *e,uint8_t buttons,uint32_t now);
 /* type 0 keyboard (32 bytes), 1 mouse (buttons byte), 2 consumer (LE u16).
  * Called ONLY with a completed USB transfer and the original snapshot tag. */

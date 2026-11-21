@@ -243,6 +243,50 @@ static void test_encoder_and_debounce(void){
     assert(!(e.pressed_mask&(1u<<14)));now+=3001;s.sequence++;s.timestamp_us=now;c77_update(&e,0,&s,now);assert(e.pressed_mask&(1u<<14));
     s.sequence++;s.encoders[1]=1;c77_update(&e,0,&s,now);c77_tick(&e,now);uint8_t keys[32];uint16_t consumer;c77_report(&e,keys,&consumer);assert(consumer==0xe9);c77_consumer_acked(&e,now);now+=2100;fresh(3000);c77_report(&e,keys,&consumer);assert(!consumer);c77_consumer_acked(&e,now);assert(!e.pulse[2]);
 }
+static void ticks(unsigned count){for(unsigned i=0;i<count;i++){now+=1000;c77_pointer_tick(&e,now);}}
+/* Keep both halves fresh (<5 ms) while time advances. */
+static void held(unsigned count,uint16_t raw){for(unsigned i=0;i<count;i++){now+=1000;fresh(raw);c77_pointer_tick(&e,now);}}
+static void test_pointer(void){
+    setup(true);
+    e.config.bindings[0]=(c77_binding){.kind=C77_BINDING_POINTER,.code=1000};
+    e.config.bindings[14]=(c77_binding){.kind=C77_BINDING_POINTER,.code=(uint16_t)-500,.modifiers=1};
+    e.config.bindings[20]=(c77_binding){.kind=C77_BINDING_POINTER,.code=(uint16_t)-7};
+    assert(c77_config_valid(&e.config));
+    enable();c77_pointer_tick(&e,now);
+    int8_t x,y;
+    /* Hall: speed scales with the reported depth (half travel = half speed). */
+    fresh(2000);held(10,2000);c77_pointer_peek(&e,&x,&y);assert(x==5&&y==0);c77_pointer_accepted(&e,x,y);
+    held(10,1000);c77_pointer_peek(&e,&x,&y);assert(x==10&&y==0);c77_pointer_accepted(&e,x,y);
+    /* The report clamps to int8 and keeps the rest for the next report. */
+    held(200,1000);c77_pointer_peek(&e,&x,&y);assert(x==127&&e.pointer_pending[0]==200);
+    c77_pointer_accepted(&e,x,y);assert(e.pointer_pending[0]==73);e.pointer_pending[0]=0;
+    /* Release stops motion; a stalled loop never jumps more than 5 ms. */
+    held(10,3000);assert(!e.pointer_pending[0]&&!e.pointer_pending[1]);
+    held(1,1000);e.pointer_pending[0]=0;e.pointer_frac[0]=0;
+    now+=100000;c77_pointer_tick(&e,now);assert(e.pointer_pending[0]==5);
+    fresh(3000);fresh(3000);enable();c77_pointer_tick(&e,now);e.pointer_pending[0]=0;e.pointer_frac[0]=0;
+    /* MX input: 30% at first, 100% after 350 ms, on its own axis. */
+    e.pressed_mask|=1u<<14;ticks(10);assert(e.pointer_pending[1]==-1&&!e.pointer_pending[0]);
+    ticks(990);assert(e.pointer_pending[1]<=-430&&e.pointer_pending[1]>=-445);
+    e.pressed_mask&=~(1u<<14);e.pointer_pending[1]=0;e.pointer_frac[1]=0;
+    /* Encoder detent: code pixels per detent. */
+    fresh(3000);fresh(3000);enable();
+    c77_sample_t s=e.sample[0];s.sequence++;s.timestamp_us=now;s.encoders[0]=(uint16_t)(e.encoder_previous[0]+3);
+    c77_update(&e,0,&s,now);assert(e.pointer_pending[0]==-21);
+    /* No retrigger pulse or keyboard usage for pointer bindings. */
+    uint8_t keys[32];uint16_t consumer;e.pressed_mask=1u;c77_report(&e,keys,&consumer);
+    for(unsigned i=0;i<32;i++)assert(!keys[i]);
+    /* Output off drops every backlog. */
+    c77_disable(&e);assert(!e.pointer_pending[0]&&!e.pointer_pending[1]&&!e.pointer_frac[0]);
+    c77_pointer_peek(&e,&x,&y);assert(!x&&!y);
+    /* Validation: speed 1..4000 either sign, axis 0/1, no third key. */
+    c77_config c=e.config;
+    c.bindings[0].code=0;assert(!c77_config_valid(&c));
+    c.bindings[0].code=4001;assert(!c77_config_valid(&c));
+    c.bindings[0].code=(uint16_t)-4000;assert(c77_config_valid(&c));
+    c.bindings[0].modifiers=2;assert(!c77_config_valid(&c));
+    c.bindings[0].modifiers=1;c.bindings[0].third_key=4;assert(!c77_config_valid(&c));
+}
 static void test_nkro_and_mouse(void){
     setup(true);enable();uint8_t keys[32];uint16_t consumer;
     for(unsigned i=0;i<20;i++)e.config.bindings[i]=(c77_binding){.kind=1,.code=(uint16_t)(4+i)};
@@ -699,7 +743,7 @@ static void test_filtered_rt_response(void)
     assert(!e.pressed_mask && !e.keys[0].rapid_cycle && e.travel[0]==0U);
 }
 #endif
-int main(void){assert(c77_crc16((const uint8_t *)"123456789",9)==0x29b1);assert(c77_crc32((const uint8_t *)"123456789",9)==0xcbf43926u);test_both_polarities();test_bottom_deadzone();test_bottom_config_compatibility();test_reference_curve();test_custom_curve();test_custom_curve_command();test_rt_and_report();test_commands();test_calibration();test_encoder_and_debounce();test_nkro_and_mouse();test_keyboard_completed_report();test_key_chord();test_acquisition_filter_math();test_conditioned_engine_path();test_fractional_filter();test_fractional_rt();test_normalization_cache();
+int main(void){assert(c77_crc16((const uint8_t *)"123456789",9)==0x29b1);assert(c77_crc32((const uint8_t *)"123456789",9)==0xcbf43926u);test_both_polarities();test_bottom_deadzone();test_bottom_config_compatibility();test_reference_curve();test_custom_curve();test_custom_curve_command();test_rt_and_report();test_commands();test_calibration();test_encoder_and_debounce();test_nkro_and_mouse();test_pointer();test_keyboard_completed_report();test_key_chord();test_acquisition_filter_math();test_conditioned_engine_path();test_fractional_filter();test_fractional_rt();test_normalization_cache();
 #if SCAN_DUAL_96K
 test_fractional_engine_path();
 #endif

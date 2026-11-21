@@ -128,7 +128,7 @@ Bottom deadzone0 disables the feature and preserves prior RT behavior. With RT o
 
 From firmware0.3.41, reported Hall travel (STATUS and trace) is0 at/below `top_deadzone`,10000 (1000 before0.3.43) at/above `MAX-bottom_deadzone`, and the original curve value everywhere between those bands. This rule also applies with RT off or a disabled key; the middle range is not rescaled. Internally the unmodified normalized sample and RT extrema still drive actuation, release and retrigger, preserving prior decisions. Raw ADC, calibration endpoints and raw-derived estimated-mm diagnostics remain unchanged; they can therefore vary while reported travel stays at an endpoint. Earlier firmware reports the unclamped curve coordinate. No key-record, settings-journal or wire-layout change is required, and this endpoint convention is not a claim of physical distance accuracy.
 
-Binding6bytes: u8 input;u8 kind(0disabled,1keyboard,2vertical_scroll,3horizontal_scroll,4consumer,5mouse_button);u16 code;u8 modifiers;u8 reserved=0. Keyboard usage4..DF orE0..E7 (0 means modifiers only); modifiers8bit. Scroll code signed16 -1 or+1; encoder directions use individual bindings. On Hall/MX inputs0..19, scroll emits one tick per press edge (including Hall RT re-press), with no timed repeat while held. Consumer allowed: B5(next),B6(previous),B7(stop),CD(play/pause),E2(mute),E9(volume+),EA(volume-). Mouse button code1left/2right/3middle/4back/5forward: Hall/MX follows hold/release; encoder directions generate bounded2ms click pulses. Nonkeyboard modifiers=0. Mouse buttons and Hall/MX scroll require capability0x20. Encoder RT is never supported; Hall RT controls only Hall inputs0..13.
+Binding6bytes: u8 input;u8 kind(0disabled,1keyboard,2vertical_scroll,3horizontal_scroll,4consumer,5mouse_button,6keyboard_chord,7pointer);u16 code;u8 modifiers;u8 reserved=0. Keyboard usage4..DF orE0..E7 (0 means modifiers only); modifiers8bit. Scroll code signed16 -1 or+1; encoder directions use individual bindings. On Hall/MX inputs0..19, scroll emits one tick per press edge (including Hall RT re-press), with no timed repeat while held. Consumer allowed: B5(next),B6(previous),B7(stop),CD(play/pause),E2(mute),E9(volume+),EA(volume-). Mouse button code1left/2right/3middle/4back/5forward: Hall/MX follows hold/release; encoder directions generate bounded2ms click pulses. Nonkeyboard modifiers=0. Mouse buttons and Hall/MX scroll require capability0x20. Encoder RT is never supported; Hall RT controls only Hall inputs0..13.
 
 C86 v0.3.22+ with INFO capability `0x2000` (`CAP_KEY_CHORD`) also accepts
 kind6, encoded as `[input,6,key1,key2,modifiers,key3-or-0]`. Ordinary
@@ -292,6 +292,27 @@ From v0.3.36, capability `0x20000` also permits an empty `ADC_PAIR` request
 with output off. This returns the right board's active rate and window
 without applying either. It uses the same temporary S7 pause as a paired
 write. A failed read does not latch a write-uncertain state.
+
+### v0.3.48 pointer movement
+
+INFO capability `0x400000` (`CAP_POINTER`) adds binding kind 7, which moves the
+mouse pointer through the X/Y bytes the mouse report always declared (they were
+sent as zero before). The 6-byte record is `[input,7,code_lo,code_hi,axis,0]`:
+`axis` 0 is X (+ right), 1 is Y (+ down); `code` is a signed 16-bit speed,
+nonzero, magnitude 1..4000.
+
+- Hall inputs 0..13: `code` px/s at full depth, scaled by the reported travel
+  (0..10000) while the key is pressed.
+- MX/knob-click inputs 14..19: `code` px/s while held, ramping linearly from
+  30% to 100% over the first 350 ms.
+- Encoder directions 20..27: `code` px per detent.
+
+The master integrates motion once per 1 ms mouse report (at most 5 ms per step
+after a stalled loop), carries sub-pixel remainders, clamps each report to
++/-127 and keeps the rest, and drops all motion when output turns off. Pointer
+bindings never create keyboard usages or retrigger pulses. Profiles keep the
+same JSON fields: `modifiers` carries the axis for kind 7. Older firmware
+rejects a stored generation containing kind 7.
 
 ### v0.3.46 custom Hall curve and ADC2 pairing
 

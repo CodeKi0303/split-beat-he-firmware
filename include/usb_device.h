@@ -27,6 +27,7 @@ void usb_keyboard_stats(usb_keyboard_stats_t *out);
 bool usb_mouse_send(uint8_t buttons,int8_t wheel,int8_t pan);
 bool usb_consumer_send(uint16_t usage);
 bool usb_mouse_send_tagged(uint8_t buttons,int8_t wheel,int8_t pan,uint32_t tag);
+bool usb_mouse_send_motion_tagged(uint8_t buttons,int8_t x,int8_t y,int8_t wheel,int8_t pan,uint32_t tag);
 bool usb_consumer_send_tagged(uint16_t usage,uint32_t tag);
 /* index 1 mouse (5 bytes), 2 consumer (2 bytes); completed snapshot only. */
 bool usb_aux_take_completed(unsigned index,uint8_t report[5],uint32_t *tag);

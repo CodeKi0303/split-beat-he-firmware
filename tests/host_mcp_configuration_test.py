@@ -390,5 +390,35 @@ class ConfigurationStudioToolsTests(unittest.TestCase):
         self.assertEqual(len(catalog), len({item["code"] for item in catalog}))
 
 
+
+class PointerBindingTests(unittest.TestCase):
+    """Firmware 0.3.48 kind 7: axis in modifiers, signed speed in code."""
+
+    def test_codec_round_trip_and_wire_layout(self):
+        from host.protocol import encode_binding, decode_binding
+        for record in (dict(input=0, kind=7, code=800, modifiers=0), dict(input=20, kind=7, code=-25, modifiers=0),
+                       dict(input=14, kind=7, code=-4000, modifiers=1)):
+            self.assertEqual(decode_binding(encode_binding(record)), record)
+        self.assertEqual(encode_binding(dict(input=20, kind=7, code=-25, modifiers=1)), bytes((20, 7, 0xE7, 0xFF, 1, 0)))
+
+    def test_validation_and_capability(self):
+        from host.protocol import (ProtocolError, binding_record, require_binding_capability,
+                                   CAP_POINTER, CAP_MOUSE_BUTTON)
+        for bad in (dict(code=0), dict(code=4001), dict(code=-4001), dict(modifiers=2)):
+            with self.assertRaises(ProtocolError):
+                binding_record({**dict(input=0, kind=7, code=100, modifiers=0), **bad})
+        record = binding_record(dict(input=0, kind=7, code=100, modifiers=0))
+        with self.assertRaises(ProtocolError):
+            require_binding_capability(record, CAP_MOUSE_BUTTON)
+        require_binding_capability(record, CAP_POINTER)
+
+    def test_label_and_catalog(self):
+        from host.mcp_configuration import binding_label, binding_catalog
+        self.assertEqual(binding_label(dict(input=0, kind=7, code=800, modifiers=0)), "Pointer Right (800)")
+        self.assertEqual(binding_label(dict(input=0, kind=7, code=-5, modifiers=1)), "Pointer Up (5)")
+        catalog = binding_catalog()
+        self.assertEqual(catalog["kinds"]["7"], "pointer")
+        self.assertEqual(catalog["pointer"]["speed_range"], [-4000, 4000])
+
 if __name__ == "__main__":
     unittest.main()

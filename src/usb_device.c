@@ -25,9 +25,7 @@ static uint8_t keyboard_report_desc[] = {
 };
 static uint8_t mouse_report_desc[] = {
     0x05,0x01,0x09,0x02,0xA1,0x01,0x09,0x01,0xA1,0x00,
-    /* Windows mouhid expects X/Y in the Mouse collection. They are declared
-     * as relative data axes but always sent as zero: this device only supplies
-     * five held buttons, wheel and pan, never pointer movement. */
+    /* Relative X/Y (0.3.48+ pointer bindings), five buttons, wheel and pan. */
     0x05,0x09,0x19,0x01,0x29,0x05,0x15,0x00,0x25,0x01,
     0x75,0x01,0x95,0x05,0x81,0x02,0x75,0x03,0x95,0x01,0x81,0x03,
     0x05,0x01,0x09,0x30,0x09,0x31,0x09,0x38,
@@ -443,10 +441,12 @@ static bool send_tagged(uint8_t index,const uint8_t *report,uint16_t size,uint32
     }
     unlock(prior);return result;
 }
-bool usb_mouse_send_tagged(uint8_t buttons,int8_t wheel,int8_t pan,uint32_t tag){
-    const uint8_t report[MOUSE_REPORT_SIZE]={(uint8_t)(buttons&31u),0,0,(uint8_t)wheel,(uint8_t)pan};
+bool usb_mouse_send_motion_tagged(uint8_t buttons,int8_t x,int8_t y,int8_t wheel,int8_t pan,uint32_t tag){
+    const uint8_t report[MOUSE_REPORT_SIZE]={(uint8_t)(buttons&31u),(uint8_t)x,(uint8_t)y,(uint8_t)wheel,(uint8_t)pan};
     return send_tagged(1,report,sizeof report,tag);
 }
+bool usb_mouse_send_tagged(uint8_t buttons,int8_t wheel,int8_t pan,uint32_t tag)
+{ return usb_mouse_send_motion_tagged(buttons,0,0,wheel,pan,tag); }
 bool usb_consumer_send_tagged(uint16_t usage,uint32_t tag){
     const uint8_t report[2]={(uint8_t)usage,(uint8_t)(usage>>8)};
     return send_tagged(2,report,2,tag);

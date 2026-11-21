@@ -333,6 +333,10 @@ static void tagged_completion_test(void)
     assert(usb_mouse_send_tagged(0,0,0,21));
     assert(c77_hid_class.DataIn(&c77_usb_device,2)==USBD_OK);
     assert(usb_aux_take_completed(1,done,&tag)&&done[0]==0&&tag==21);
+    /* 0.3.48 pointer motion fills the X/Y bytes declared in the descriptor. */
+    assert(usb_mouse_send_motion_tagged(2,-5,7,0,0,22));
+    assert(c77_hid_class.DataIn(&c77_usb_device,2)==USBD_OK);
+    assert(usb_aux_take_completed(1,done,&tag)&&done[0]==2&&done[1]==(uint8_t)-5&&done[2]==7&&tag==22);
     assert(usb_consumer_send_tagged(0xe9,30));
     assert(!usb_consumer_send_tagged(0,31));
     assert(c77_hid_class.DataIn(&c77_usb_device,3)==USBD_OK);

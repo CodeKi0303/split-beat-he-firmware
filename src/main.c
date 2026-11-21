@@ -196,14 +196,16 @@ int main(void){
             (void)usb_keyboard_publish_tagged(keys,engine.retrigger_epoch);
         }
         if((uint32_t)(now-last_aux)>=1000u){
-            uint8_t keys[32];uint16_t consumer;int8_t wheel,pan;c77_report(&engine,keys,&consumer);
+            uint8_t keys[32];uint16_t consumer;int8_t wheel,pan,x,y;c77_report(&engine,keys,&consumer);
             if(usb_consumer_send_tagged(consumer,engine.retrigger_epoch))c77_consumer_acked(&engine,now);
-            c77_mouse_peek(&engine,&wheel,&pan);
+            c77_pointer_tick(&engine,now);
+            c77_mouse_peek(&engine,&wheel,&pan);c77_pointer_peek(&engine,&x,&y);
             uint8_t buttons=c77_mouse_buttons(&engine);
             /* Send neutral button state too: disabling output, stale sources,
              * and a release must never leave a mouse button held on the host. */
-            if(usb_mouse_send_tagged(buttons,wheel,pan,engine.retrigger_epoch)){
-                c77_mouse_accepted(&engine,wheel,pan);c77_mouse_acked(&engine,buttons,now);
+            if(usb_mouse_send_motion_tagged(buttons,x,y,wheel,pan,engine.retrigger_epoch)){
+                c77_mouse_accepted(&engine,wheel,pan);c77_pointer_accepted(&engine,x,y);
+                c77_mouse_acked(&engine,buttons,now);
             }
             last_aux=now;
         }
