@@ -28,6 +28,8 @@ Split-Beat HE의 모든 저장소에 적용합니다. 저장소마다 버전을 
 | split-beat-he-wheel | `vX.Y.Z` | 없음 | `v1.0.0` | 끼워맞춤이 바뀌는 형상 변경은 MINOR |
 | split-beat-he-docs | 없음 | — | — | main에 push하면 바로 배포 |
 
+릴리스 제목은 `Split-Beat HE Firmware 0.4.0 (C86)`, `Split-Beat HE Studio 1.1.0`, `Split-Beat HE Plugin 0.2.0`처럼 제품명·구성 요소·버전 순으로 씁니다. 하드웨어는 `Split-Beat HE Hardware C86`, 휠은 `Split-Beat HE Wheel 1.0.0`입니다.
+
 시험판은 `-rc.N`을 붙이고 GitHub에서 pre-release로 표시합니다(예: `v0.4.0-rc.1`). Studio 자동 배포는 정식 릴리스만 사용합니다.
 
 ## 릴리스 순서

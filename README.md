@@ -5,7 +5,7 @@ C86 스플릿 홀 이펙트 컨트롤러용 STM32 펌웨어입니다. 좌우 앱
 ## 사용
 
 - 새 보드는 [최초 SWD 기록](C86-FIRST-FLASH.md)을 진행합니다. 이미 부팅부가 설치되어 있으면 [릴리스](https://github.com/CodeKi0303/split-beat-he-firmware/releases)의 좌우 `*.fw.json`을 [Studio](https://studio.codekilab.com/)의 펌웨어 화면에서 설치합니다.
-- PC는 왼쪽 PC 포트에 연결합니다. 오른쪽은 왼쪽 split 포트로 연결하며, 업데이트도 왼쪽을 통해 중계합니다.
+- PC는 왼쪽 키보드 뒤쪽 바깥(노브 쪽) 포트에 연결합니다. 왼쪽과 오른쪽은 두 안쪽 포트끼리 e-marker가 없는 60W 미만 USB-C ↔ USB-C 데이터 케이블로 잇습니다. 오른쪽 업데이트도 왼쪽을 통해 중계합니다. 그림은 [사용 설명서](https://docs.codekilab.com/#start)에 있습니다.
 - [로컬 MCP 설치와 보정](docs/MCP-CONTROL.md), [USB 업데이트 프로토콜](docs/FIRMWARE-UPDATE.md), [하드웨어 제작](https://github.com/CodeKi0303/split-beat-he-hardware), [Studio 소스](https://github.com/CodeKi0303/split-beat-he-studio).
 
 ## 변경 기록
