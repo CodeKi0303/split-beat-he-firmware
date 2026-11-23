@@ -1,5 +1,36 @@
 # Keyboard protocol v1 — C77 / C85 / C86
 
+## Feature compatibility
+
+Hosts gate every feature on the INFO capability bit, never on a version string.
+The versions below are the first releases that support each feature; older
+hosts may fail to read a configuration that uses a newer feature, so update
+Studio and the plugin together with the firmware.
+
+| Feature | Capability | Firmware | Studio | Plugin |
+|---|---|---|---|---|
+| Mouse-button bindings, press-edge scroll | `0x20` | 0.2 | 1.0.0 | 0.1.0 |
+| Bottom deadzone | `0x100` | 0.3.4 | 1.0.0 | 0.1.0 |
+| Hall reference curve (`curve_id` 1) | `0x200` | 0.3.5 | 1.0.0 | 0.1.0 |
+| Key chords (binding kind 6) | `0x2000` | 0.3.22 | 1.0.0 | 0.1.0 |
+| Saved output state | `0x4000` | 0.3.23¹ | 1.0.0 | 0.1.0 |
+| Shared ADC scan rate and moving average | `0x8000` | 0.3.34 | 1.0.2 | 0.1.6 |
+| Right-half ADC read-back | `0x20000` | 0.3.36 | 1.0.3 | 0.1.6 |
+| Retrigger before release | `0x40000` | 0.3.37-rc.1 | 1.0.5 | 0.1.3 |
+| 0.001 mm settings (travel 0..10000) | `0x80000` | 0.3.43 | 1.0.11 | 0.1.5 |
+| Custom drawn curve (`curve_id` 2) | `0x200000` | 0.3.46 | 1.0.13 | 0.1.6 |
+| ADC compare for right-half keys | `0x8000` | 0.3.47 | 1.0.14 | 0.1.7 |
+| Pointer movement (binding kind 7) | `0x400000` | 0.3.48 | 1.0.16 | 0.1.7 |
+| Roller/knob pointer acceleration | `0x800000` | 0.3.49 | 1.0.18 | 0.1.7 |
+
+¹ First public firmware release; the feature predates it. Likewise Studio
+1.0.0 and plugin 0.1.0 are the first public releases of those hosts.
+
+Firmware updates from Studio need the permanent C86 bootloader (0.3.0+); the
+firmware tab inside Studio arrived in Studio 1.0.15. Versioning rules for all
+Split-Beat HE repositories are in [VERSIONING.md](VERSIONING.md).
+
+
 Firmware0.3.43 (all hardware profiles) changes the normalized Hall travel coordinate from0..1000 to0..10000, advertised by INFO capability bit19 (`0x80000`, `CAP_FINE_TRAVEL`). One unit is 1/10000 of the configured switch stroke (0.00034mm at3.4mm), so hosts can enter AP/RT/deadzone settings in0.001mm steps. Key-record thresholds (`actuation`, `rt_press`, `rt_release`, `top_deadzone`, `bottom_deadzone`), `STATUS.travel` and ADC_TRACE travel all use the new coordinate on the wire; raw ADC, calibration endpoints, `noise_deadband` (ADC codes), `curve_id`, flags, bindings and every packet layout are unchanged. The finer coordinate is a setting resolution, not a sensor resolution: decisions still move with the (averaged) ADC sample, typically several thousandths of a millimetre per ADC code on C86. Hosts work in0..10000 internally and convert at the HID boundary for firmware without0x80000: received thresholds and STATUS/trace travel are multiplied by10, and a write is accepted only when every threshold is a multiple of10 (mm entry rounds to that step; a raw normalized value that is not a multiple of10 is rejected before any mutation). The settings journal writes format78 records; format77 records written by0.3.42 and earlier are still read and their five thresholds are multiplied by10, so an update keeps the saved profile, output state, calibration and mappings. Firmware0.3.42 and earlier reject format78 records and fall back to an older format77 generation or to defaults; save once from the older firmware's host after a downgrade. `c77-profile-v1` JSON adds `"travel_max": 10000`; a profile without it is an older 0..1000 export and is converted (x10) on import. Defaults scale with the coordinate (actuation2000, RT1000/1000, top deadzone300).
 
 The explicit C86-left v0.3.10 `--adc-dual64` candidate uses ADC1/2 at64kHz,
