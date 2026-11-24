@@ -18,6 +18,6 @@ int main(void){
         if(!c77_command(&e,q,r,now,2,1024))return 3;
         for(unsigned i=0;i<64;i++)printf("%02x",r[i]);
         puts("");fflush(stdout);
-        if(e.save_requested){cfg=e.config;c77_engine_init(&e,&cfg,e.generation+1,true);}
+        if(e.save_requested){cfg=e.config;c77_profile_bank bank=e.profiles;c77_engine_init(&e,&cfg,e.generation+1,true);e.profiles=bank;}
     }return 0;
 }

@@ -134,14 +134,17 @@ class KeyboardClient:
         # The dedicated FirmwareUpdater owns update permission and sequencing.
         # Even right-side update INFO changes relay/output state, so unknown
         # opcodes must never bypass the normal configuration mutation gate.
-        if type(op) is not int or not (1 <= op <= 10 or 0x40 <= op <= CUSTOM_CURVE):
+        if type(op) is not int or not (1 <= op <= 10 or 0x40 <= op <= PROFILE):
             raise ProtocolError("Unsupported configuration opcode; firmware updates require the dedicated updater")
-        mutates = op in MUTATIONS or (op in (ADC_TUNING, ADC_PAIR, CUSTOM_CURVE) and bool(payload))
+        mutates = (op in MUTATIONS or (op in (ADC_TUNING, ADC_PAIR, CUSTOM_CURVE) and bool(payload))
+                   or (op == PROFILE and bool(payload) and payload[0] >= 2))
         if mutates and not self.write_enabled:
             raise PermissionError("read-only session: restart with --write-enabled for configuration changes")
         with self.lock:
-            if (mutates or op in (ADC_TUNING, ADC_COMPARE, ADC_PAIR, TELEMETRY_CONTROL, TELEMETRY_READ, CUSTOM_CURVE)) and not self.identified:
+            if (mutates or op in (ADC_TUNING, ADC_COMPARE, ADC_PAIR, TELEMETRY_CONTROL, TELEMETRY_READ, CUSTOM_CURVE, PROFILE)) and not self.identified:
                 self.info()
+            if op == PROFILE and not self.device_info["capabilities"] & CAP_PROFILES:
+                raise ProtocolError("This firmware does not support profiles (0.4.0+)")
             if op == CUSTOM_CURVE and not self.device_info["capabilities"] & CAP_CUSTOM_CURVE:
                 raise ProtocolError("This firmware does not support a custom Hall curve (0.3.46+)")
             if op in (TELEMETRY_CONTROL, TELEMETRY_READ) and not self.device_info["capabilities"] & CAP_TELEMETRY:
@@ -237,6 +240,39 @@ class KeyboardClient:
         if reply != list(points):
             raise ProtocolError("custom curve readback differs")
         return reply
+
+    def profiles(self):
+        """Active profile, used slots and names (empty name = default)."""
+        with self.lock:
+            state = decode_profile_state(self.request(PROFILE, bytes([0])))
+            names = []
+            for i in range(state["count"]):
+                reply = self.request(PROFILE, bytes([1, i]))
+                if len(reply) != 1 + PROFILE_NAME_BYTES or reply[0] != i:
+                    raise ProtocolError("profile name readback mismatch")
+                names.append(decode_profile_name(reply[1:]))
+            return dict(state, names=names)
+
+    def _profile_change(self, payload):
+        return decode_profile_state(self.request(PROFILE, payload))
+
+    def select_profile(self, index):
+        """RAM only: loads the profile's keys/bindings, releases keys, output off."""
+        state = self._profile_change(bytes([2, integer(index, 0, PROFILE_COUNT - 1, "profile")]))
+        if state["active"] != index:
+            raise ProtocolError("profile selection readback mismatch")
+        return state
+
+    def create_profile(self, index, source):
+        """Copies source (the live values when it is active) into an empty slot."""
+        return self._profile_change(bytes([3, integer(index, 0, PROFILE_COUNT - 1, "profile"),
+                                           integer(source, 0, PROFILE_COUNT - 1, "source profile")]))
+
+    def delete_profile(self, index):
+        return self._profile_change(bytes([4, integer(index, 0, PROFILE_COUNT - 1, "profile")]))
+
+    def rename_profile(self, index, name):
+        return self._profile_change(bytes([5, integer(index, 0, PROFILE_COUNT - 1, "profile")]) + encode_profile_name(name))
 
     def get_config(self):
         with self.lock:

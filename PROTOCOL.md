@@ -22,6 +22,7 @@ Studio and the plugin together with the firmware.
 | ADC compare for right-half keys | `0x8000` | 0.3.47 | 1.0.14 | 0.1.7 |
 | Pointer movement (binding kind 7) | `0x400000` | 0.3.48 | 1.0.16 | 0.1.7 |
 | Roller/knob pointer acceleration | `0x800000` | 0.3.49 | 1.0.18 | 0.1.7 |
+| Four on-device profiles (command `0x4D`) | `0x1000000` | 0.4.0 | 1.1.0 | — |
 
 ¹ First public firmware release; the feature predates it. Likewise Studio
 1.0.0 and plugin 0.1.0 are the first public releases of those hosts.
@@ -323,6 +324,44 @@ From v0.3.36, capability `0x20000` also permits an empty `ADC_PAIR` request
 with output off. This returns the right board's active rate and window
 without applying either. It uses the same temporary S7 pause as a paired
 write. A failed read does not latch a write-uncertain state.
+
+### v0.4.0 profiles
+
+INFO capability `0x1000000` (`CAP_PROFILES`) adds four on-device profiles.
+
+- **Per profile:** every Hall key's `actuation`, `rt_press`, `rt_release`,
+  `top_deadzone`, `bottom_deadzone` and flags bit1 (RT) and bit3 (retrigger),
+  plus all 28 bindings.
+- **Shared by all profiles:** calibration endpoints, flags bit0 (enabled) and
+  bit2 (calibrated), `noise_deadband`, `curve_id` and the custom curve.
+- GET_KEY, SET_KEY, GET_BINDING, SET_BINDING, DEFAULTS and the profile JSON act
+  on the **active** profile. INFO `config_crc` covers only the active profile.
+
+Command `0x4D` payloads (every reply except name is `[count=4, active, used_mask]`):
+
+| Request | Meaning |
+|---|---|
+| `[0]` | state |
+| `[1, i]` | name: reply `[i, 16 bytes]`, NUL-padded UTF-8, empty = host default name |
+| `[2, i]` | select a used profile: stores the live keys/bindings in the old slot, loads slot `i`, releases keys and turns output off like SET_KEY |
+| `[3, i, source]` | create: copy a used `source` (its live values when active) into the empty slot `i`, with an empty name |
+| `[4, i]` | delete a used, inactive profile |
+| `[5, i, name16]` | rename a used profile; bytes after the first NUL must be 0, no bytes 0x01..0x1F or 0x7F |
+
+Requests 2..5 return `BUSY` while a save or calibration is pending, mark the RAM
+configuration dirty and need SAVE to persist. A wrong slot is `BAD_INDEX`, a bad
+name `BAD_CONFIG`, a bad length or sub-command `BAD_PACKET`.
+
+SAVE writes settings journal **format 80**: 2048-byte records (64 per sector)
+holding the format 79 payload plus a 1354-byte bank `[active, used_mask]` and four
+338-byte slots (14 × `[flags, actuation, rt_press, rt_release, top, bottom]`,
+28 × 6-byte bindings with their index byte, 16-byte name; unused slots are all
+zero). The active slot must equal the live keys/bindings. A sector holds one
+record size only: the first format 80 save erases the other sector and starts
+at its slot 0, so the 576-byte records of 0.3.x stay intact as a fallback until
+that sector is next rotated. Formats 77..79 load as one profile. Firmware
+0.3.49 and older do not read format 80: after a downgrade they use the older
+generation if it still exists, otherwise defaults.
 
 ### v0.3.48 pointer movement
 

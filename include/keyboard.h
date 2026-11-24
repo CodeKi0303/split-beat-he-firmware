@@ -29,8 +29,24 @@ typedef struct { uint16_t code; uint8_t kind,modifiers,third_key; } c77_binding;
 /* curve is the shared RT_CURVE_CUSTOM table. It is not part of the 476-byte
  * key/binding encoding; storage and INFO config_crc append it. */
 typedef struct { c77_key_config keys[C77_HALL]; c77_binding bindings[C77_INPUTS]; uint16_t curve[RT_CUSTOM_CURVE_POINTS]; } c77_config;
+/* 0.4.0+: four profiles of the per-profile settings: each Hall key's actuation,
+ * press/release RT, top/bottom deadzone and RT/retrigger flags, plus all 28
+ * bindings. Calibration endpoints, the enabled/calibrated flags, noise
+ * deadband, curve_id and the custom curve stay shared by every profile. The
+ * live c77_config always holds the active profile; slots[active] is refreshed
+ * from it when switching or saving. Command 0x4D lists, selects, creates,
+ * deletes and renames profiles; names are 16 bytes, NUL-padded UTF-8 (empty
+ * means a host-chosen default). */
+enum { C77_PROFILES=4, C77_PROFILE_NAME_BYTES=16, C77_PROFILE_KEY_FLAGS=0x02|C77_KEY_RETRIGGER,
+       C77_PROFILE_BYTES=C77_HALL*11+C77_INPUTS*6+C77_PROFILE_NAME_BYTES,
+       C77_PROFILE_BANK_BYTES=2+C77_PROFILES*C77_PROFILE_BYTES,
+       C77_OP_PROFILE=0x4D, C77_CAP_PROFILES=0x1000000 };
+typedef struct { uint16_t actuation,rt_press,rt_release,top_deadzone,bottom_deadzone; uint8_t flags; } c77_profile_key;
+typedef struct { c77_profile_key keys[C77_HALL]; c77_binding bindings[C77_INPUTS]; uint8_t name[C77_PROFILE_NAME_BYTES]; } c77_profile;
+typedef struct { uint8_t active,used; c77_profile slots[C77_PROFILES]; } c77_profile_bank;
 typedef struct {
     c77_config config;
+    c77_profile_bank profiles;
     rt_key_t keys[C77_HALL];
     c77_sample_t sample[2];
     uint16_t filtered[C77_HALL],travel[C77_HALL],encoder_previous[4];
@@ -79,6 +95,16 @@ void c77_curve_encode(const uint16_t curve[RT_CUSTOM_CURVE_POINTS],uint8_t out[C
 bool c77_curve_decode(uint16_t curve[RT_CUSTOM_CURVE_POINTS],const uint8_t in[C77_CURVE_BYTES]);
 /* CRC32 of the key/binding encoding followed by the custom curve. */
 uint32_t c77_config_crc(const c77_config *cfg);
+/* Profiles. capture copies the per-profile fields of cfg into p (keeping its
+ * name); apply writes p's fields into cfg and fails without change if the
+ * result is invalid. init makes a bank with cfg as the only, active profile. */
+void c77_profile_capture(c77_profile *p,const c77_config *cfg);
+bool c77_profile_apply(c77_config *cfg,const c77_profile *p);
+void c77_profiles_init(c77_profile_bank *bank,const c77_config *cfg);
+bool c77_profile_name_valid(const uint8_t name[C77_PROFILE_NAME_BYTES]);
+bool c77_profiles_valid(const c77_profile_bank *bank,const c77_config *cfg);
+void c77_profiles_encode(const c77_profile_bank *bank,uint8_t out[C77_PROFILE_BANK_BYTES]);
+bool c77_profiles_decode(c77_profile_bank *bank,const uint8_t in[C77_PROFILE_BANK_BYTES],const c77_config *cfg);
 /* Decode a 0..1000-unit record written by firmware <=0.3.42 into 0..10000 units. */
 bool c77_config_decode_legacy(c77_config *cfg,const uint8_t in[C77_CONFIG_BYTES]);
 void c77_engine_init(c77_engine *e,const c77_config *cfg,uint32_t generation,bool stored);

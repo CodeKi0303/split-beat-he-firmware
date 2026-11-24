@@ -21,8 +21,8 @@ Split-Beat HE의 모든 저장소에 적용합니다. 저장소마다 버전을 
 
 | 저장소 | 태그 | 현재 | 다음 기능 릴리스 | 비고 |
 |---|---|---|---|---|
-| split-beat-he-firmware | `vX.Y.Z` | `c86-v0.3.49` | `v0.4.0` | 0.3.x까지는 `c86-` 접두사. 펌웨어 범위의 1.0.0은 정식 USB VID/PID를 받고 설정 형식이 안정된 뒤 |
-| split-beat-he-studio | `vX.Y.Z` | `v1.0.19` | `v1.1.0` | 새 탭·기능은 MINOR |
+| split-beat-he-firmware | `vX.Y.Z` | `v0.4.0` | `v0.5.0` | 0.3.x까지는 `c86-` 접두사. 펌웨어 범위의 1.0.0은 정식 USB VID/PID를 받고 설정 형식이 안정된 뒤 |
+| split-beat-he-studio | `vX.Y.Z` | `v1.1.0` | `v1.2.0` | 새 탭·기능은 MINOR |
 | split-beat-he-plugin | `vX.Y.Z` | `v0.1.7` | `v0.2.0` | `pyproject.toml`, `plugin.json`, `claude/manifest.json`의 버전을 함께 올림 |
 | split-beat-he-hardware | 리비전 이름 (`c86`) | 없음 | `c86` | Gerber·BOM·CPL 묶음을 릴리스 첨부 파일로. 같은 리비전 안의 문서 수정은 `c86.1`처럼 |
 | split-beat-he-wheel | `vX.Y.Z` | 없음 | `v1.0.0` | 끼워맞춤이 바뀌는 형상 변경은 MINOR |

@@ -5,23 +5,35 @@
 
 #define STORE_BASE H723_SETTINGS_BASE
 #define SECTOR_BYTES H723_SECTOR_BYTES
-#define RECORD_BYTES 576U
+/* Format 80 (firmware 0.4.0+) adds the four-profile bank and needs a larger
+ * record: 2048 bytes, 64 per sector. Formats 77..79 use 576-byte records. A
+ * sector holds one record size only: format 80 is first written at slot 0 of
+ * a freshly erased sector, so the record at slot 0 tells the stride. */
+#define RECORD_BYTES 2048U
+#define OLD_RECORD_BYTES 576U
 #define WORD_BYTES 32U
 #define RECORDS_PER_SECTOR (SECTOR_BYTES / RECORD_BYTES)
+#define OLD_RECORDS_PER_SECTOR (SECTOR_BYTES / OLD_RECORD_BYTES)
 #define RECORD_MAGIC 0x37374B43UL /* CK77 */
 #define COMMIT_MAGIC 0x54494D43UL /* CMIT */
-/* 79 (firmware 0.3.46+): format 78 plus the 30-byte custom curve. 78
- * (0.3.43+): travel thresholds in 0..10000. 77: 0..1000, converted. 78/77 load
- * with the identity custom curve, so an update keeps the saved profile.
- * Firmware <=0.3.45 rejects 79 records and falls back to an older generation
- * (or defaults); <=0.3.42 also rejects 78. */
-#define FORMAT_VERSION 79U
+/* 80 (0.4.0+): format 79 plus the profile bank. 79 (0.3.46+): format 78 plus
+ * the 30-byte custom curve. 78 (0.3.43+): travel thresholds in 0..10000. 77:
+ * 0..1000, converted. 77..79 load as a bank with one profile; 77/78 also with
+ * the identity custom curve, so an update keeps the saved profile. Firmware
+ * <=0.3.49 does not read format 80 and falls back to an older generation in
+ * the other sector (or defaults); <=0.3.45 also rejects 79, <=0.3.42 also 78. */
+#define FORMAT_VERSION 80U
+#define CURVE_FORMAT_VERSION 79U
 #define FINE_FORMAT_VERSION 78U
 #define LEGACY_FORMAT_VERSION 77U
-#define PAYLOAD_BYTES (C77_CONFIG_BYTES + C77_CURVE_BYTES)
+#define PAYLOAD_BYTES (C77_CONFIG_BYTES + C77_CURVE_BYTES + C77_PROFILE_BANK_BYTES)
+#define CURVE_PAYLOAD_BYTES (C77_CONFIG_BYTES + C77_CURVE_BYTES)
 #define OLD_PAYLOAD_BYTES C77_CONFIG_BYTES
-#define COMMIT_OFFSET 544U
+#define COMMIT_OFFSET (RECORD_BYTES - WORD_BYTES)
+#define OLD_COMMIT_OFFSET 544U
 _Static_assert(32U + PAYLOAD_BYTES <= COMMIT_OFFSET, "Settings payload must end before the commit word");
+_Static_assert(32U + CURVE_PAYLOAD_BYTES <= OLD_COMMIT_OFFSET, "Format 79 payload must end before its commit word");
+_Static_assert(SECTOR_BYTES % RECORD_BYTES == 0U, "Format 80 records must tile the sector");
 
 static uint32_t last_error;
 
@@ -137,10 +149,10 @@ static uint32_t crc_update(uint32_t crc, const uint8_t *data, uint32_t size)
     }
     return crc;
 }
-static uint32_t record_crc(const uint8_t *record)
+static uint32_t record_crc(const uint8_t *record, uint32_t commit_offset)
 {
     uint32_t crc = crc_update(UINT32_MAX, record, 12U);
-    return ~crc_update(crc, record + 16U, COMMIT_OFFSET - 16U);
+    return ~crc_update(crc, record + 16U, commit_offset - 16U);
 }
 
 static void make_commit(uint8_t *out, uint32_t generation, uint32_t crc)
@@ -150,38 +162,66 @@ static void make_commit(uint8_t *out, uint32_t generation, uint32_t crc)
     put32(out + 16, crc); put32(out + 20, ~crc);
     put32(out + 24, RECORD_MAGIC); put32(out + 28, ~RECORD_MAGIC);
 }
-static void encode_record(uint8_t *record, const c77_config *profile, uint32_t generation, bool output_enabled)
+/* Writes a format 80 record. slots[active] is refreshed from profile, so the
+ * stored bank always matches the live configuration; a NULL bank stores the
+ * live configuration as the only profile. */
+static void encode_record(uint8_t *record, const c77_config *profile, const c77_profile_bank *bank,
+                          uint32_t generation, bool output_enabled)
 {
+    c77_profile_bank stored;
+    if (bank != NULL) stored = *bank; else c77_profiles_init(&stored, profile);
+    c77_profile_capture(&stored.slots[stored.active], profile);
     memset(record, 0, RECORD_BYTES);
     put32(record, RECORD_MAGIC); put16(record + 4, FORMAT_VERSION);
     put16(record + 6, PAYLOAD_BYTES); put32(record + 8, generation);
     record[16] = output_enabled;
     c77_config_encode(profile, record + 32);
     c77_curve_encode(profile->curve, record + 32 + C77_CONFIG_BYTES);
-    uint32_t crc = record_crc(record);
+    c77_profiles_encode(&stored, record + 32 + CURVE_PAYLOAD_BYTES);
+    uint32_t crc = record_crc(record, COMMIT_OFFSET);
     put32(record + 12, crc);
     make_commit(record + COMMIT_OFFSET, generation, crc);
 }
-static int decode_record(const uint8_t *record, c77_config *profile, uint32_t *generation, bool *output_enabled)
+/* size is the stride the record was read with (RECORD_BYTES or OLD_RECORD_BYTES). */
+static int decode_record(const uint8_t *record, uint32_t size, c77_config *profile, c77_profile_bank *bank,
+                         uint32_t *generation, bool *output_enabled)
 {
     const uint16_t version = get16(record + 4);
-    const uint32_t payload = version == FORMAT_VERSION ? PAYLOAD_BYTES : OLD_PAYLOAD_BYTES;
+    const int large = version == FORMAT_VERSION;
+    const uint32_t payload = large ? PAYLOAD_BYTES : version == CURVE_FORMAT_VERSION ? CURVE_PAYLOAD_BYTES : OLD_PAYLOAD_BYTES;
+    const uint32_t commit_offset = large ? COMMIT_OFFSET : OLD_COMMIT_OFFSET;
+    if (size != (large ? RECORD_BYTES : OLD_RECORD_BYTES)) return 0;
     if (get32(record) != RECORD_MAGIC ||
-        (version != FORMAT_VERSION && version != FINE_FORMAT_VERSION && version != LEGACY_FORMAT_VERSION) ||
+        (version != FORMAT_VERSION && version != CURVE_FORMAT_VERSION &&
+         version != FINE_FORMAT_VERSION && version != LEGACY_FORMAT_VERSION) ||
         get16(record + 6) != payload || get32(record + 8) == 0U ||
-        get32(record + 12) != record_crc(record)) return 0;
+        get32(record + 12) != record_crc(record, commit_offset)) return 0;
     if (record[16] > 1U) return 0;
     for (unsigned i = 17; i < 32U; ++i) if (record[i] != 0U) return 0;
-    for(unsigned i=32U+payload;i<COMMIT_OFFSET;i++) if(record[i]) return 0;
+    for (uint32_t i = 32U + payload; i < commit_offset; i++) if (record[i]) return 0;
     c77_config decoded;
     if(!(version == LEGACY_FORMAT_VERSION ? c77_config_decode_legacy(&decoded,record+32) :
          c77_config_decode(&decoded,record+32))) return 0;
-    if(version == FORMAT_VERSION &&
+    if(version >= CURVE_FORMAT_VERSION &&
        (!c77_curve_decode(decoded.curve,record+32+C77_CONFIG_BYTES) || !c77_config_valid(&decoded))) return 0;
+    c77_profile_bank profiles;
+    if (large) {
+        if (!c77_profiles_decode(&profiles, record + 32 + CURVE_PAYLOAD_BYTES, &decoded)) return 0;
+        /* The active slot must hold exactly the live per-profile fields:
+         * re-encoding with it refreshed from the live keys gives the same bytes. */
+        static uint8_t check[C77_PROFILE_BANK_BYTES];
+        c77_profile_bank refreshed = profiles;
+        c77_profile_capture(&refreshed.slots[refreshed.active], &decoded);
+        c77_profiles_encode(&refreshed, check);
+        if (memcmp(check, record + 32 + CURVE_PAYLOAD_BYTES, sizeof check) != 0) return 0;
+    } else {
+        c77_profiles_init(&profiles, &decoded);
+    }
     uint8_t commit[WORD_BYTES];
     make_commit(commit, get32(record + 8), get32(record + 12));
-    if (memcmp(record + COMMIT_OFFSET, commit, WORD_BYTES) != 0) return 0;
-    if(profile != NULL) *profile=decoded;
+    if (memcmp(record + commit_offset, commit, WORD_BYTES) != 0) return 0;
+    if (profile != NULL) *profile = decoded;
+    if (bank != NULL) *bank = profiles;
     if (generation != NULL) *generation = get32(record + 8);
     if (output_enabled != NULL) *output_enabled = record[16] != 0U;
     return 1;
@@ -195,31 +235,46 @@ static int all_erased(const uint8_t *data, uint32_t size)
 typedef struct {
     int found;
     unsigned sector;
-    uint32_t generation, next_slot[2];
+    uint32_t generation, next_slot[2], stride[2];
     c77_config profile;
+    c77_profile_bank bank;
     bool output_enabled;
 } scan_result_t;
+
+/* Static: 2 KB records and the scan state do not belong on the 8 KB stack. */
+static uint8_t scan_buffer[RECORD_BYTES], write_buffer[RECORD_BYTES], verify_buffer[RECORD_BYTES];
+static scan_result_t scan_state;
+
+static uint32_t sector_stride(unsigned sector)
+{
+    uint8_t head[8];
+    if (!flash_read(sector * SECTOR_BYTES, head, sizeof head)) return OLD_RECORD_BYTES;
+    if (all_erased(head, sizeof head)) return RECORD_BYTES;
+    return get32(head) == RECORD_MAGIC && get16(head + 4) == FORMAT_VERSION ? RECORD_BYTES : OLD_RECORD_BYTES;
+}
 
 static void scan_journal(scan_result_t *result)
 {
     memset(result, 0, sizeof *result);
-    uint8_t record[RECORD_BYTES];
+    uint8_t *record = scan_buffer;
     for (unsigned sector = 0; sector < 2U; ++sector) {
-        for (uint32_t slot = 0; slot < RECORDS_PER_SECTOR; ++slot) {
-            uint32_t address = sector * SECTOR_BYTES + slot * RECORD_BYTES;
-            if (!flash_read(address, record, sizeof record)) {
+        const uint32_t stride = sector_stride(sector);
+        result->stride[sector] = stride;
+        for (uint32_t slot = 0; slot < SECTOR_BYTES / stride; ++slot) {
+            uint32_t address = sector * SECTOR_BYTES + slot * stride;
+            if (!flash_read(address, record, stride)) {
                 result->next_slot[sector] = slot + 1U;
                 continue; /* Unreadable/torn ECC is occupied, never reused. */
             }
-            if (all_erased(record, sizeof record)) continue;
+            if (all_erased(record, stride)) continue;
             result->next_slot[sector] = slot + 1U;
             uint32_t generation;
-            if (decode_record(record, NULL, &generation, NULL) &&
+            if (decode_record(record, stride, NULL, NULL, &generation, NULL) &&
                 (!result->found || (int32_t)(generation - result->generation) > 0)) {
                 result->found = 1;
                 result->sector = sector;
                 result->generation = generation;
-                (void)decode_record(record, &result->profile, NULL, &result->output_enabled);
+                (void)decode_record(record, stride, &result->profile, &result->bank, NULL, &result->output_enabled);
             }
         }
     }
@@ -227,47 +282,49 @@ static void scan_journal(scan_result_t *result)
 
 uint32_t settings_store_last_error(void) { return last_error; }
 
-int settings_store_load(c77_config *profile, uint32_t *generation, bool *output_enabled)
+int settings_store_load(c77_config *profile, c77_profile_bank *bank, uint32_t *generation, bool *output_enabled)
 {
     if (output_enabled != NULL) *output_enabled = false;
     last_error = SETTINGS_ERROR_NONE;
     if (profile == NULL) { last_error = SETTINGS_ERROR_ARGUMENT; return 0; }
     if (!flash_layout_valid()) { last_error = SETTINGS_ERROR_LAYOUT; return 0; }
     if (!flash_ready()) { last_error = SETTINGS_ERROR_CACHE; return 0; }
-    scan_result_t scan;
-    scan_journal(&scan);
-    if (!scan.found) return 0;
-    *profile = scan.profile;
-    if (generation != NULL) *generation = scan.generation;
-    if (output_enabled != NULL) *output_enabled = scan.output_enabled;
+    scan_result_t *scan = &scan_state;
+    scan_journal(scan);
+    if (!scan->found) return 0;
+    *profile = scan->profile;
+    if (bank != NULL) *bank = scan->bank;
+    if (generation != NULL) *generation = scan->generation;
+    if (output_enabled != NULL) *output_enabled = scan->output_enabled;
     return 1;
 }
 
-int settings_store_save(const c77_config *profile, uint32_t *new_generation, bool output_enabled)
+int settings_store_save(const c77_config *profile, const c77_profile_bank *bank, uint32_t *new_generation, bool output_enabled)
 {
     last_error = SETTINGS_ERROR_NONE;
-    if (!c77_config_valid(profile)) {
+    if (!c77_config_valid(profile) || (bank != NULL && !c77_profiles_valid(bank, profile))) {
         last_error = SETTINGS_ERROR_ARGUMENT; return 0;
     }
     if (!flash_layout_valid()) { last_error = SETTINGS_ERROR_LAYOUT; return 0; }
     if (!flash_ready()) { last_error = SETTINGS_ERROR_CACHE; return 0; }
-    scan_result_t scan;
-    scan_journal(&scan);
-    unsigned sector = scan.found ? scan.sector : 0U;
-    uint32_t slot = scan.next_slot[sector];
-    int erase_needed = slot >= RECORDS_PER_SECTOR;
+    scan_result_t *scan = &scan_state;
+    scan_journal(scan);
+    unsigned sector = scan->found ? scan->sector : 0U;
+    uint32_t slot = scan->next_slot[sector];
+    /* Format 80 never shares a sector with 576-byte records. */
+    int erase_needed = scan->stride[sector] != RECORD_BYTES || slot >= RECORDS_PER_SECTOR;
     if (erase_needed) { sector ^= 1U; slot = 0U; }
-    uint32_t generation = scan.found ? scan.generation + 1U : 1U;
+    uint32_t generation = scan->found ? scan->generation + 1U : 1U;
     if (generation == 0U) generation = 1U;
-    uint8_t record[RECORD_BYTES], verify[RECORD_BYTES];
-    encode_record(record, profile, generation, output_enabled);
+    uint8_t *record = write_buffer, *verify = verify_buffer;
+    encode_record(record, profile, bank, generation, output_enabled);
     if (!flash_unlock()) { last_error = SETTINGS_ERROR_UNLOCK; return 0; }
     if (erase_needed && !flash_erase(sector)) {
         last_error = SETTINGS_ERROR_ERASE;
         goto done;
     }
     uint32_t offset = sector * SECTOR_BYTES + slot * RECORD_BYTES;
-    if (!flash_read(offset, verify, sizeof verify) || !all_erased(verify, sizeof verify)) {
+    if (!flash_read(offset, verify, RECORD_BYTES) || !all_erased(verify, RECORD_BYTES)) {
         last_error = SETTINGS_ERROR_VERIFY;
         goto done;
     }
@@ -284,8 +341,8 @@ int settings_store_save(const c77_config *profile, uint32_t *new_generation, boo
     if (!flash_program(offset + COMMIT_OFFSET, record + COMMIT_OFFSET)) {
         last_error = SETTINGS_ERROR_PROGRAM; goto done;
     }
-    if (!flash_read(offset, verify, sizeof verify) ||
-        memcmp(verify, record, sizeof record) != 0 || !decode_record(verify, NULL, NULL, NULL)) {
+    if (!flash_read(offset, verify, RECORD_BYTES) ||
+        memcmp(verify, record, RECORD_BYTES) != 0 || !decode_record(verify, RECORD_BYTES, NULL, NULL, NULL, NULL)) {
         last_error = SETTINGS_ERROR_VERIFY; goto done;
     }
     if (new_generation != NULL) *new_generation = generation;

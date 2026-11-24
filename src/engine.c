@@ -10,6 +10,7 @@ static void install(c77_engine *e,unsigned i){
 }
 void c77_engine_init(c77_engine *e,const c77_config *cfg,uint32_t generation,bool stored){
     memset(e,0,sizeof *e);e->config=*cfg;e->generation=generation;e->stored_valid=(uint8_t)stored;e->cal_key=255;
+    c77_profiles_init(&e->profiles,cfg);
     for(unsigned i=0;i<C77_HALL;i++)install(e,i);
 }
 void c77_disable(c77_engine *e){

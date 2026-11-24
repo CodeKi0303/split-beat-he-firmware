@@ -124,3 +124,93 @@ bool c77_config_decode_legacy(c77_config *cfg,const uint8_t in[C77_CONFIG_BYTES]
     if(!c77_config_valid(&tmp))return false;
     *cfg=tmp;return true;
 }
+void c77_profile_capture(c77_profile *p,const c77_config *cfg){
+    for(unsigned i=0;i<C77_HALL;i++){
+        const c77_key_config *k=&cfg->keys[i];
+        p->keys[i]=(c77_profile_key){.actuation=k->actuation,.rt_press=k->rt_press,.rt_release=k->rt_release,
+            .top_deadzone=k->top_deadzone,.bottom_deadzone=k->bottom_deadzone,.flags=(uint8_t)(k->flags&C77_PROFILE_KEY_FLAGS)};
+    }
+    memcpy(p->bindings,cfg->bindings,sizeof p->bindings);
+}
+bool c77_profile_apply(c77_config *cfg,const c77_profile *p){
+    c77_config tmp=*cfg;
+    for(unsigned i=0;i<C77_HALL;i++){
+        const c77_profile_key *s=&p->keys[i];c77_key_config *k=&tmp.keys[i];
+        if(s->flags&~C77_PROFILE_KEY_FLAGS)return false;
+        k->actuation=s->actuation;k->rt_press=s->rt_press;k->rt_release=s->rt_release;
+        k->top_deadzone=s->top_deadzone;k->bottom_deadzone=s->bottom_deadzone;
+        k->flags=(uint8_t)((k->flags&~C77_PROFILE_KEY_FLAGS)|s->flags);
+    }
+    memcpy(tmp.bindings,p->bindings,sizeof tmp.bindings);
+    if(!c77_config_valid(&tmp))return false;
+    *cfg=tmp;return true;
+}
+void c77_profiles_init(c77_profile_bank *bank,const c77_config *cfg){
+    memset(bank,0,sizeof *bank);bank->used=1;c77_profile_capture(&bank->slots[0],cfg);
+}
+bool c77_profile_name_valid(const uint8_t name[C77_PROFILE_NAME_BYTES]){
+    bool ended=false;
+    for(unsigned i=0;i<C77_PROFILE_NAME_BYTES;i++){
+        if(!name[i]){ended=true;continue;}
+        if(ended||name[i]<0x20u||name[i]==0x7fu)return false;
+    }
+    return true;
+}
+/* Field by field: struct padding is not part of a profile. */
+static bool profile_empty(const c77_profile *p){
+    for(unsigned i=0;i<C77_HALL;i++){
+        const c77_profile_key *k=&p->keys[i];
+        if(k->actuation||k->rt_press||k->rt_release||k->top_deadzone||k->bottom_deadzone||k->flags)return false;
+    }
+    for(unsigned i=0;i<C77_INPUTS;i++){
+        const c77_binding *b=&p->bindings[i];
+        if(b->code||b->kind||b->modifiers||b->third_key)return false;
+    }
+    for(unsigned i=0;i<C77_PROFILE_NAME_BYTES;i++)if(p->name[i])return false;
+    return true;
+}
+bool c77_profiles_valid(const c77_profile_bank *bank,const c77_config *cfg){
+    if(!bank||!cfg||bank->active>=C77_PROFILES||bank->used>0x0fu||!(bank->used&(1u<<bank->active)))return false;
+    for(unsigned s=0;s<C77_PROFILES;s++){
+        const c77_profile *p=&bank->slots[s];
+        if(!(bank->used&(1u<<s))){if(!profile_empty(p))return false;continue;}
+        c77_config probe=*cfg;
+        if(!c77_profile_name_valid(p->name)||!c77_profile_apply(&probe,p))return false;
+    }
+    return true;
+}
+void c77_profiles_encode(const c77_profile_bank *bank,uint8_t out[C77_PROFILE_BANK_BYTES]){
+    memset(out,0,C77_PROFILE_BANK_BYTES);out[0]=bank->active;out[1]=bank->used;
+    for(unsigned s=0;s<C77_PROFILES;s++){
+        uint8_t *p=out+2+s*C77_PROFILE_BYTES;const c77_profile *src=&bank->slots[s];
+        for(unsigned i=0;i<C77_HALL;i++){
+            uint8_t *k=p+i*11;const c77_profile_key *v=&src->keys[i];
+            k[0]=v->flags;p16(k+1,v->actuation);p16(k+3,v->rt_press);p16(k+5,v->rt_release);p16(k+7,v->top_deadzone);p16(k+9,v->bottom_deadzone);
+        }
+        for(unsigned i=0;i<C77_INPUTS;i++){
+            uint8_t *b=p+C77_HALL*11+i*6;const c77_binding *v=&src->bindings[i];
+            /* Unused slots stay all zero, so their binding index bytes are 0. */
+            b[0]=(uint8_t)((bank->used&(1u<<s))?i:0u);b[1]=v->kind;p16(b+2,v->code);b[4]=v->modifiers;b[5]=v->third_key;
+        }
+        memcpy(p+C77_HALL*11+C77_INPUTS*6,src->name,C77_PROFILE_NAME_BYTES);
+    }
+}
+bool c77_profiles_decode(c77_profile_bank *bank,const uint8_t in[C77_PROFILE_BANK_BYTES],const c77_config *cfg){
+    c77_profile_bank tmp;memset(&tmp,0,sizeof tmp);tmp.active=in[0];tmp.used=in[1];
+    if(tmp.used>0x0fu)return false;
+    for(unsigned s=0;s<C77_PROFILES;s++){
+        const uint8_t *p=in+2+s*C77_PROFILE_BYTES;c77_profile *dst=&tmp.slots[s];const bool used=(tmp.used&(1u<<s))!=0;
+        for(unsigned i=0;i<C77_HALL;i++){
+            const uint8_t *k=p+i*11;
+            dst->keys[i]=(c77_profile_key){.flags=k[0],.actuation=g16(k+1),.rt_press=g16(k+3),.rt_release=g16(k+5),.top_deadzone=g16(k+7),.bottom_deadzone=g16(k+9)};
+        }
+        for(unsigned i=0;i<C77_INPUTS;i++){
+            const uint8_t *b=p+C77_HALL*11+i*6;
+            if(b[0]!=(used?i:0u))return false;
+            dst->bindings[i]=(c77_binding){.kind=b[1],.code=g16(b+2),.modifiers=b[4],.third_key=b[5]};
+        }
+        memcpy(dst->name,p+C77_HALL*11+C77_INPUTS*6,C77_PROFILE_NAME_BYTES);
+    }
+    if(!c77_profiles_valid(&tmp,cfg))return false;
+    *bank=tmp;return true;
+}

@@ -187,6 +187,52 @@ static void test_custom_curve_command(void){
     /* DEFAULTS restores the identity table. */
     assert(command(8,NULL,0,r)==0&&e.config.curve[0]==625);
 }
+/* 0x4D profiles: four slots of thresholds/RT flags and bindings over shared
+ * calibration; select swaps the live configuration, the rest only mark dirty. */
+static void test_profile_command(void){
+    setup(true);enable();uint8_t r[64],q[18];
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){0},1,r)==0&&r[7]==3&&r[8]==4&&r[9]==0&&r[10]==1&&e.output);
+    /* Create 1 from 0, rename it; output stays on (no reconfigure). */
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){3,1,0},3,r)==0&&r[10]==3&&e.output&&e.dirty);
+    memset(q,0,sizeof q);q[0]=5;q[1]=1;memcpy(q+2,"FPS",3);
+    assert(command(C77_OP_PROFILE,q,18,r)==0&&!memcmp(e.profiles.slots[1].name,"FPS",4));
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){1,1},2,r)==0&&r[7]==17&&r[8]==1&&!memcmp(r+9,"FPS",4));
+    /* Select 1, change key 0 and binding 0 there; profile 0 keeps its values. */
+    const uint16_t act0=e.config.keys[0].actuation;const uint8_t kind0=e.config.bindings[0].kind;const uint16_t code0=e.config.bindings[0].code;
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){2,1},2,r)==0&&r[9]==1&&!e.output);
+    uint8_t index=0;assert(command(3,&index,1,r)==0);uint8_t key[22];memcpy(key,r+8,22);key[6]=0x34;key[7]=0x03;key[1]=(uint8_t)(key[1]&0xfdu); /* 820, RT off */
+    assert(command(4,key,22,r)==0&&e.config.keys[0].actuation==820);
+    const uint8_t bind[6]={0,1,0x04,0,0,0};assert(command(10,bind,6,r)==0&&e.config.bindings[0].code==4);
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){2,0},2,r)==0&&r[9]==0);
+    assert(e.config.keys[0].actuation==act0&&(e.config.keys[0].flags&2)&&e.config.bindings[0].kind==kind0&&e.config.bindings[0].code==code0);
+    assert(e.keys[0].config.actuation==act0&&e.keys[0].config.rapid_trigger_enabled);
+    assert(e.profiles.slots[1].keys[0].actuation==820&&e.profiles.slots[1].bindings[0].code==4&&!(e.profiles.slots[1].keys[0].flags&2));
+    /* Calibration is shared: recalibrating under profile 0 shows in profile 1. */
+    e.config.keys[3].released=2100;e.config.keys[3].pressed=2700;
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){2,1},2,r)==0&&e.config.keys[3].released==2100&&e.config.keys[0].actuation==820);
+    /* Rejections change nothing. */
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){2,2},2,r)==C77_BAD_INDEX&&e.profiles.active==1); /* unused */
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){4,1},2,r)==C77_BAD_INDEX); /* active */
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){3,1,0},3,r)==C77_BAD_INDEX); /* in use */
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){3,2,3},3,r)==C77_BAD_INDEX); /* empty source */
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){1,4},2,r)==C77_BAD_INDEX);
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){6},1,r)==C77_BAD_PACKET);
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){2,1,0},3,r)==C77_BAD_PACKET);
+    assert(command(C77_OP_PROFILE,NULL,0,r)==C77_BAD_PACKET);
+    q[2]=0x01;assert(command(C77_OP_PROFILE,q,18,r)==C77_BAD_CONFIG);
+    memset(q+2,0,16);q[2]='A';q[4]='B';assert(command(C77_OP_PROFILE,q,18,r)==C77_BAD_CONFIG); /* text after NUL */
+    /* Copy the active profile (live values, not a stale slot), delete it again. */
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){3,3,1},3,r)==0&&r[10]==0x0b);
+    assert(e.profiles.slots[3].keys[0].actuation==820&&e.profiles.slots[3].name[0]==0);
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){4,3},2,r)==0&&r[10]==3&&e.profiles.slots[3].keys[0].actuation==0);
+    assert(c77_profiles_valid(&e.profiles,&e.config));
+    /* Busy while a save is pending; reads still answer. */
+    e.save_requested=1;assert(command(C77_OP_PROFILE,(const uint8_t[]){2,0},2,r)==C77_BUSY);
+    assert(command(C77_OP_PROFILE,(const uint8_t[]){0},1,r)==0);e.save_requested=0;
+    /* INFO advertises the capability. */
+    assert(command(1,NULL,0,r)==0);
+    const uint32_t caps=(uint32_t)r[24]|((uint32_t)r[25]<<8)|((uint32_t)r[26]<<16)|((uint32_t)r[27]<<24);assert(caps&C77_CAP_PROFILES);
+}
 static void test_rt_and_report(void){
     setup(true);enable();now+=63;fresh(2500);assert(e.pressed_mask&1);uint8_t keys[32];uint16_t consumer;c77_report(&e,keys,&consumer);assert(keys[0x2b/8]&(1u<<(0x2b%8)));assert(keys[0xe1/8]&(1u<<(0xe1%8)));
     now+=63;fresh(2800);assert(!(e.pressed_mask&1));now+=63;fresh(2550);assert(e.pressed_mask&1);
@@ -202,7 +248,7 @@ static void test_rt_and_report(void){
 static void test_commands(void){
     setup(false);uint8_t r[64],one=1;assert(command(6,&one,1,r)==C77_NOT_READY);assert(command(1,NULL,0,r)==0&&r[7]==34&&r[12]==14);
     assert(r[38]==HARDWARE_REVISION&&r[39]==1&&r[13]==6&&r[14]==4&&r[15]==28);
-    assert(r[8]==0&&r[9]==3&&r[10]==(FW_UPDATE_VERSION&0xffu));
+    assert(r[8]==0&&r[9]==((FW_UPDATE_VERSION>>16)&0xffu)&&r[10]==(FW_UPDATE_VERSION&0xffu));
     assert(r[25]==(HARDWARE_REVISION==86?0x63:0x43));
     assert(!e.output); /* INFO and initial connection never enable input. */
     uint8_t q[64],bad[64];packet(q,1,NULL,0);for(unsigned i=2;i<64;i++)for(unsigned b=0;b<8;b++){memcpy(bad,q,64);bad[i]^=(uint8_t)(1u<<b);assert(c77_command(&e,bad,r,now,2,1024)&&r[6]==C77_BAD_PACKET);}
@@ -760,7 +806,7 @@ static void test_filtered_rt_response(void)
     assert(!e.pressed_mask && !e.keys[0].rapid_cycle && e.travel[0]==0U);
 }
 #endif
-int main(void){assert(c77_crc16((const uint8_t *)"123456789",9)==0x29b1);assert(c77_crc32((const uint8_t *)"123456789",9)==0xcbf43926u);test_both_polarities();test_bottom_deadzone();test_bottom_config_compatibility();test_reference_curve();test_custom_curve();test_custom_curve_command();test_rt_and_report();test_commands();test_calibration();test_encoder_and_debounce();test_nkro_and_mouse();test_pointer();test_keyboard_completed_report();test_key_chord();test_acquisition_filter_math();test_conditioned_engine_path();test_fractional_filter();test_fractional_rt();test_normalization_cache();
+int main(void){assert(c77_crc16((const uint8_t *)"123456789",9)==0x29b1);assert(c77_crc32((const uint8_t *)"123456789",9)==0xcbf43926u);test_both_polarities();test_bottom_deadzone();test_bottom_config_compatibility();test_reference_curve();test_custom_curve();test_custom_curve_command();test_profile_command();test_rt_and_report();test_commands();test_calibration();test_encoder_and_debounce();test_nkro_and_mouse();test_pointer();test_keyboard_completed_report();test_key_chord();test_acquisition_filter_math();test_conditioned_engine_path();test_fractional_filter();test_fractional_rt();test_normalization_cache();
 #if SCAN_DUAL_96K
 test_fractional_engine_path();
 #endif

@@ -26,6 +26,7 @@ def main():
       [sys.executable,'-m','unittest','tests.host_retrigger_test'],
       [sys.executable,'-m','unittest','tests.host_hall_curve_test'],
       [sys.executable,'-m','unittest','tests.host_mapping_defaults_test'],
+      [sys.executable,'-m','unittest','tests.host_profile_test'],
       [sys.executable,'tests/host_mcp_e2e.py'],
       [sys.executable,'tests/host_core_bridge.py'],
       [sys.executable,'tests/hall_curve_parity.py'],

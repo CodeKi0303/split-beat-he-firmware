@@ -37,6 +37,21 @@ class DemoTransport:
         # Wire units follow the capability word actually sent in the last INFO,
         # so tests that emulate firmware <=0.3.42 also get 0..1000 records.
         self.wire_legacy = False
+        self.bank = self._new_bank()
+        self.stored_bank = None
+
+    def _profile_part(self):
+        keys = [{f: k.get(f, 0) for f in TRAVEL_FIELDS} | {"flags": k["flags"] & PROFILE_KEY_FLAGS} for k in self.profile["keys"]]
+        return dict(keys=keys, bindings=copy.deepcopy(self.profile["bindings"]))
+
+    def _new_bank(self):
+        return dict(active=0, used=1, slots=[dict(self._profile_part(), name=b"\0" * PROFILE_NAME_BYTES), None, None, None])
+
+    def _apply_part(self, part):
+        for key, saved in zip(self.profile["keys"], part["keys"]):
+            key.update({f: saved[f] for f in TRAVEL_FIELDS})
+            key["flags"] = key["flags"] & ~PROFILE_KEY_FLAGS | saved["flags"]
+        self.profile["bindings"] = copy.deepcopy(part["bindings"])
 
     def close(self):
         self.models.clear()
@@ -48,6 +63,7 @@ class DemoTransport:
         self.models.clear()
         self.pressed_mask = 0
         self.profile = copy.deepcopy(self.stored)
+        self.bank = copy.deepcopy(self.stored_bank) if self.stored_bank else self._new_bank()
         self.dirty = False
         self.enabled = self.stored_output
         self.queue.clear()
@@ -78,7 +94,7 @@ class DemoTransport:
         if op == INFO:
             if p: raise ProtocolError("length")
             crc = zlib.crc32(b"".join(encode_key(k) for k in self.profile["keys"])+b"".join(encode_binding(b) for b in self.profile["bindings"]))
-            return struct.pack("<8B5IH4B", 0,3,41,0,14,6,4,28,64000,125,0x33f | CAP_KEY_CHORD | CAP_SAVE_OUTPUT | CAP_RETRIGGER_BEFORE_RELEASE | CAP_FINE_TRAVEL | CAP_POINTER | CAP_POINTER_ACCEL, self.generation,crc,1024,86,1,2,bool(self.stored))
+            return struct.pack("<8B5IH4B", 0,3,41,0,14,6,4,28,64000,125,0x33f | CAP_KEY_CHORD | CAP_SAVE_OUTPUT | CAP_RETRIGGER_BEFORE_RELEASE | CAP_FINE_TRAVEL | CAP_POINTER | CAP_POINTER_ACCEL | CAP_PROFILES, self.generation,crc,1024,86,1,2,bool(self.stored))
         if op == STATUS:
             if len(p) != 1 or p[0] > 1: raise ProtocolError("side")
             elapsed = time.monotonic()-self.start
@@ -158,6 +174,8 @@ class DemoTransport:
             self.stored_output = self.enabled
             self.enabled = False
             self.stored = copy.deepcopy(self.profile)
+            self.bank["slots"][self.bank["active"]].update(self._profile_part())
+            self.stored_bank = copy.deepcopy(self.bank)
             self.generation = ((self.generation+1) & 0xFFFFFFFF) or 1
             return struct.pack("<I", self.generation)
         if op == DEFAULTS:
@@ -167,7 +185,49 @@ class DemoTransport:
             self.pressed_mask = 0
             self.enabled, self.dirty = False, True
             return b""
+        if op == PROFILE:
+            return self._profile_command(p)
         raise ProtocolError("unknown command")
+
+    def _profile_command(self, p):
+        lengths = {0: 1, 1: 2, 2: 2, 3: 3, 4: 2, 5: 2 + PROFILE_NAME_BYTES}
+        if not p or p[0] not in lengths or len(p) != lengths[p[0]]:
+            raise ProtocolError("length")
+        b, sub_op = self.bank, p[0]
+        index = p[1] if len(p) > 1 else 0
+        if index >= PROFILE_COUNT:
+            raise ProtocolError("index")
+        used = lambda i: b["used"] >> i & 1
+        if sub_op == 1:
+            slot = b["slots"][index]
+            return bytes([index]) + (slot["name"] if slot else b"\0" * PROFILE_NAME_BYTES)
+        if sub_op == 2:
+            if not used(index): raise ProtocolError("unused")
+            if index != b["active"]:
+                b["slots"][b["active"]].update(self._profile_part())
+                self._apply_part(b["slots"][index])
+                b["active"] = index
+                self.models.clear()
+                self.pressed_mask = 0
+                self.enabled, self.dirty = False, True
+        elif sub_op == 3:
+            source = p[2]
+            if used(index) or source >= PROFILE_COUNT or not used(source): raise ProtocolError("slot")
+            part = self._profile_part() if source == b["active"] else copy.deepcopy(b["slots"][source])
+            b["slots"][index] = dict(part, name=b"\0" * PROFILE_NAME_BYTES)
+            b["used"] |= 1 << index
+            self.dirty = True
+        elif sub_op == 4:
+            if not used(index) or index == b["active"]: raise ProtocolError("slot")
+            b["slots"][index] = None
+            b["used"] &= ~(1 << index)
+            self.dirty = True
+        elif sub_op == 5:
+            if not used(index): raise ProtocolError("unused")
+            decode_profile_name(bytes(p[2:]))
+            b["slots"][index]["name"] = bytes(p[2:])
+            self.dirty = True
+        return bytes([PROFILE_COUNT, b["active"], b["used"]])
 
     def read(self, timeout_ms):
         if self.queue:

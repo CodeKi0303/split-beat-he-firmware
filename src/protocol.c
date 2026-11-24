@@ -32,6 +32,43 @@ bool c77_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t now,ui
         }
         c77_curve_encode(e->config.curve,out);length=C77_CURVE_BYTES;goto done;
     }
+    if(q[3]==C77_OP_PROFILE){
+        /* [0] state; [1,i] name; [2,i] select; [3,i,source] create from a copy;
+         * [4,i] delete; [5,i,name16] rename. Every reply but name returns
+         * [count,active,used]. Mutations mark the RAM configuration dirty;
+         * select also releases keys and turns output off like SET_KEY. */
+        static const uint8_t lengths[6]={1,2,2,3,2,2+C77_PROFILE_NAME_BYTES};
+        c77_profile_bank *b=&e->profiles;const unsigned sub=q[7]?in[0]:255u,index=q[7]>1?in[1]:0u;
+        if(!q[7]||sub>5u||q[7]!=lengths[sub]){status=C77_BAD_PACKET;goto done;}
+        if(sub>=2u&&(e->save_requested||e->cal_state)){status=C77_BUSY;goto done;}
+        if(sub>=1u&&index>=C77_PROFILES){status=C77_BAD_INDEX;goto done;}
+        const unsigned bit=1u<<index;
+        if(sub==1u){out[0]=(uint8_t)index;memcpy(out+1,b->slots[index].name,C77_PROFILE_NAME_BYTES);length=1+C77_PROFILE_NAME_BYTES;goto done;}
+        if(sub==2u){
+            if(!(b->used&bit)){status=C77_BAD_INDEX;goto done;}
+            if(index!=b->active){
+                c77_config candidate=e->config;
+                if(!c77_profile_apply(&candidate,&b->slots[index])){status=C77_BAD_CONFIG;goto done;}
+                c77_profile_capture(&b->slots[b->active],&e->config);
+                b->active=(uint8_t)index;e->config=candidate;c77_reconfigure(e);
+            }
+        }else if(sub==3u){
+            const unsigned source=in[2];
+            if((b->used&bit)||source>=C77_PROFILES||!(b->used&(1u<<source))){status=C77_BAD_INDEX;goto done;}
+            c77_profile copy=b->slots[source];
+            if(source==b->active)c77_profile_capture(&copy,&e->config);
+            memset(copy.name,0,sizeof copy.name);
+            b->slots[index]=copy;b->used|=(uint8_t)bit;e->dirty=1;
+        }else if(sub==4u){
+            if(!(b->used&bit)||index==b->active){status=C77_BAD_INDEX;goto done;}
+            memset(&b->slots[index],0,sizeof b->slots[index]);b->used&=(uint8_t)~bit;e->dirty=1;
+        }else if(sub==5u){
+            if(!(b->used&bit)){status=C77_BAD_INDEX;goto done;}
+            if(!c77_profile_name_valid(in+2)){status=C77_BAD_CONFIG;goto done;}
+            memcpy(b->slots[index].name,in+2,C77_PROFILE_NAME_BYTES);e->dirty=1;
+        }
+        out[0]=C77_PROFILES;out[1]=b->active;out[2]=b->used;length=3;goto done;
+    }
     const uint8_t sizes[11]={255,0,1,1,22,2,1,0,0,1,6};
     if(q[3]==0||q[3]>10){status=C77_BAD_COMMAND;goto done;}
     if(q[7]!=sizes[q[3]]){status=C77_BAD_PACKET;goto done;}
@@ -41,7 +78,7 @@ bool c77_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t now,ui
     case 1:
         out[0]=(uint8_t)((FW_UPDATE_VERSION>>24)&255U);out[1]=(uint8_t)((FW_UPDATE_VERSION>>16)&255U);out[2]=(uint8_t)(FW_UPDATE_VERSION&255U);
         out[3]=0;out[4]=14;out[5]=6;out[6]=4;out[7]=28;p32(out+8,SCAN_TARGET_HZ);p32(out+12,speed==2?125:1000);
-        uint32_t capabilities=(HARDWARE_REVISION==86?0x3ffu:0x33fu)|C77_CAP_SAVE_OUTPUT|C77_CAP_FINE_TRAVEL|C77_CAP_CUSTOM_CURVE|C77_CAP_POINTER|C77_CAP_POINTER_ACCEL;
+        uint32_t capabilities=(HARDWARE_REVISION==86?0x3ffu:0x33fu)|C77_CAP_SAVE_OUTPUT|C77_CAP_FINE_TRAVEL|C77_CAP_CUSTOM_CURVE|C77_CAP_POINTER|C77_CAP_POINTER_ACCEL|C77_CAP_PROFILES;
 #if SCAN_ADC_PHASE_PAIR
         p32(out+8,adc_scan_rate());
         capabilities|=C77_CAP_ADC_TUNING|C77_CAP_ADC_PAIR|C77_CAP_ADC_PAIR_READ;

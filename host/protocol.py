@@ -48,6 +48,21 @@ POINTER_MAX = 4000
 # accel when it is 0.
 CAP_POINTER_ACCEL = 0x800000
 POINTER_ACCEL_MAX = 15
+# Firmware 0.4.0+: four on-device profiles. Each holds every Hall key's
+# actuation, press/release RT, top/bottom deadzone and RT/retrigger flags plus
+# all 28 bindings; calibration, enabled/calibrated flags, noise deadband,
+# curve_id and the custom curve are shared. GET_KEY/SET_KEY/GET_BINDING/
+# SET_BINDING act on the active profile. Command 0x4D payloads:
+#   [0] state -> [count, active, used_mask]
+#   [1, i] name -> [i, 16-byte NUL-padded UTF-8 name] (empty = host default)
+#   [2, i] select (releases keys, output off)  [3, i, source] create a copy
+#   [4, i] delete (not the active one)          [5, i, name16] rename
+# Mutations (2..5) mark the RAM configuration dirty; SAVE persists all four.
+CAP_PROFILES = 0x1000000
+PROFILE = 0x4D
+PROFILE_COUNT = 4
+PROFILE_NAME_BYTES = 16
+PROFILE_KEY_FLAGS = 0x02 | 0x08
 ADC_SCAN_RATES = (8000, 16000, 32000, 64000, 96000)
 ADC_WINDOWS = (0, 1, 2, 4, 6, 8)
 INFO, STATUS, GET_KEY, SET_KEY, CALIBRATE, OUTPUT, SAVE, DEFAULTS, GET_BINDING, SET_BINDING = range(1, 11)
@@ -159,6 +174,36 @@ def require_key_capability(key, capabilities):
         raise ProtocolError("Nonlinear Hall curve requires firmware 0.3.5+ capability 0x200; no device mutation performed")
     if key.get("curve_id", 0) == 2 and not capabilities & CAP_CUSTOM_CURVE:
         raise ProtocolError("Custom Hall curve requires firmware 0.3.46+ capability 0x200000; no device mutation performed")
+
+
+def encode_profile_name(name):
+    """16-byte NUL-padded UTF-8; empty means the host's default name."""
+    if not isinstance(name, str):
+        raise ProtocolError("profile name must be a string")
+    data = name.encode("utf-8")
+    if len(data) > PROFILE_NAME_BYTES:
+        raise ProtocolError(f"profile name is longer than {PROFILE_NAME_BYTES} UTF-8 bytes")
+    if any(b < 0x20 or b == 0x7F for b in data):
+        raise ProtocolError("profile name cannot contain control characters")
+    return data.ljust(PROFILE_NAME_BYTES, b"\0")
+
+
+def decode_profile_name(data):
+    if len(data) != PROFILE_NAME_BYTES:
+        raise ProtocolError("profile name length")
+    text = data.split(b"\0", 1)[0]
+    if data[len(text):].strip(b"\0"):
+        raise ProtocolError("profile name has bytes after its end")
+    return text.decode("utf-8", "replace")
+
+
+def decode_profile_state(data):
+    if len(data) != 3:
+        raise ProtocolError("profile state length")
+    count, active, used = data
+    if count != PROFILE_COUNT or active >= count or used >> count or not used >> active & 1:
+        raise ProtocolError("invalid profile state")
+    return dict(count=count, active=active, used=[i for i in range(count) if used >> i & 1])
 
 
 def custom_curve_record(points):

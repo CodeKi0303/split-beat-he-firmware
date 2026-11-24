@@ -61,11 +61,13 @@ int main(void){
 #if ROLE_LEFT
     c77_config config;uint32_t generation=0;c77_defaults(&config);
     bool saved_output=false;
-    bool stored=settings_store_load(&config,&generation,&saved_output)!=0;
+    static c77_profile_bank profiles;
+    bool stored=settings_store_load(&config,&profiles,&generation,&saved_output)!=0;
 #if HARDWARE_REVISION==86
     if(fw_boot_output_hold_take())saved_output=false;
 #endif
     c77_engine_init(&engine,&config,generation,stored);
+    if(stored)engine.profiles=profiles;
     engine.restore_output_pending=stored&&saved_output;
     usb_device_init();session=usb_session_generation();
 #endif
@@ -291,7 +293,7 @@ int main(void){
         if(engine.save_requested&&save_reply_queued&&usb_vendor_idle()&&(uint32_t)(now-save_accepted_at)>=25000u){
             /* Single-bank flash stalls execution. No input/USB promises during save. */
             c77_disable(&engine);usb_device_stop();board_stop();
-            (void)settings_store_save(&engine.config,&engine.generation,engine.save_output);
+            (void)settings_store_save(&engine.config,&engine.profiles,&engine.generation,engine.save_output);
             board_reboot();
         }
         CPU_PROFILE_END(prof_vendor,CPU_PROF_VENDOR);
