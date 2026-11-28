@@ -12,9 +12,10 @@ for (const v of vectors) {
   const key = { released: v.released, pressed: v.pressed, curve_id: v.curve_id, flags: 7 };
   for (let raw = 0; raw <= 4095; raw++) {
     assert.equal(rawToTravel(raw, key, v.custom_curve), v.travel[raw], `curve ${v.curve_id}, raw ${raw}, endpoints ${v.released}/${v.pressed}`);
-    if (v.curve_id === 1) {
+    if (v.curve_id === 1 || v.curve_id === 3) {
       const at34 = rawToEstimatedMm(raw, key, 3.4);
       const at40 = rawToEstimatedMm(raw, key, 4.0);
+      assert.ok(Math.abs(at34 - v.travel[raw] * 3.4 / 10000) < 1e-12);
       assert.ok(Math.abs(at40 - at34 * 4 / 3.4) < 1e-12);
     }
     count++;

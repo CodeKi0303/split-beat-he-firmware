@@ -14,10 +14,39 @@ static bool config_valid(const rt_config_t *config)
     return span >= RT_MIN_ADC_SPAN &&
            config->actuation > config->top_deadzone &&
            config->actuation <= RT_TRAVEL_MAX &&
+           (!config->fixed_release || (config->fixed_release >= config->top_deadzone &&
+                                       config->fixed_release < config->actuation)) &&
            config->bottom_deadzone <= RT_TRAVEL_MAX - config->actuation &&
-           config->curve_id <= RT_CURVE_CUSTOM &&
+           config->curve_id <= RT_CURVE_WISH_OWLAB_TI &&
            config->rt_press >= 1U && config->rt_press <= RT_TRAVEL_MAX &&
            config->rt_release >= 1U && config->rt_release <= RT_TRAVEL_MAX;
+}
+
+/* Uniform distance knots (i / 32 of the stroke), each holding the predicted
+ * magnetic signal in Q15. Generated from nominal 120/750 Gs and 3.4 mm by
+ * tools/wish_owlab_curve.py. Inversion uses five comparisons per cache miss. */
+static uint16_t wish_owlab_travel(uint32_t distance, uint32_t span)
+{
+    static const uint16_t knots[33] = {
+        0, 287, 591, 913, 1256, 1621, 2009, 2423, 2864, 3334, 3836,
+        4373, 4948, 5563, 6222, 6930, 7690, 8507, 9386, 10333, 11355,
+        12457, 13648, 14936, 16330, 17841, 19479, 21258, 23189, 25289,
+        27574, 30060, 32767
+    };
+    /* All physical Q5 spans are at most 4095 * 32. Keep fractional ADC
+     * precision and the fast 32-bit divide; generic test/API spans can be wider. */
+    const uint32_t signal = span <= RT_ADC_Q5_MAX ?
+        (distance * 32767U + span / 2U) / span :
+        (uint32_t)(((uint64_t)distance * 32767U + span / 2U) / span);
+    unsigned lo = 0, hi = 32;
+    while (hi - lo > 1U) {
+        const unsigned mid = (lo + hi) / 2U;
+        if (signal < knots[mid]) hi = mid;
+        else lo = mid;
+    }
+    const uint32_t width = knots[hi] - knots[lo];
+    const uint32_t position = lo * width + (signal - knots[lo]);
+    return (uint16_t)((position * RT_TRAVEL_MAX + 16U * width) / (32U * width));
 }
 
 static uint16_t normalize_distance(const rt_config_t *config,
@@ -29,6 +58,8 @@ static uint16_t normalize_distance(const rt_config_t *config,
     }
     if (distance <= 0) return 0U;
     if (distance >= span) return RT_TRAVEL_MAX;
+    if (config->curve_id == RT_CURVE_WISH_OWLAB_TI)
+        return wish_owlab_travel((uint32_t)distance, (uint32_t)span);
     /* Nearest 1/RT_TRAVEL_MAX of the span. Real 12-bit (and Q5) distances are
      * <=131064, so distance*10000 plus half-span fits int32_t and uses the
      * hardware 32-bit divider. The generic API also accepts full uint16
@@ -89,6 +120,7 @@ void rt_config_defaults(rt_config_t *config, uint16_t adc_released,
     config->adc_released = adc_released;
     config->adc_pressed = adc_pressed;
     config->actuation = 2000U;
+    config->fixed_release = 0U;
     config->rt_press = 500U;
     config->rt_release = 500U;
     config->top_deadzone = 200U;
@@ -137,7 +169,10 @@ static rt_result_t process_travel(rt_key_t *key, uint16_t travel)
         key->rapid_cycle = false;
         key->extreme = key->travel;
     } else if (!key->config.rapid_trigger_enabled) {
-        key->pressed = key->travel >= key->config.actuation;
+        if (was_pressed && key->config.fixed_release)
+            key->pressed = key->travel > key->config.fixed_release;
+        else
+            key->pressed = key->travel >= key->config.actuation;
         key->rapid_cycle = false;
         key->extreme = key->travel;
     } else if (key->config.bottom_deadzone &&

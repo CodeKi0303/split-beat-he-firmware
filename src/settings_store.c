@@ -16,13 +16,16 @@
 #define OLD_RECORDS_PER_SECTOR (SECTOR_BYTES / OLD_RECORD_BYTES)
 #define RECORD_MAGIC 0x37374B43UL /* CK77 */
 #define COMMIT_MAGIC 0x54494D43UL /* CMIT */
-/* 80 (0.4.0+): format 79 plus the profile bank. 79 (0.3.46+): format 78 plus
+/* 81 (0.5.0+): the old bank followed by 4 x 14 fixed-release values. The
+ * 2048-byte stride is unchanged, so 80 and 81 can share a sector.
+ * 80 (0.4.0+): format 79 plus the profile bank. 79 (0.3.46+): format 78 plus
  * the 30-byte custom curve. 78 (0.3.43+): travel thresholds in 0..10000. 77:
  * 0..1000, converted. 77..79 load as a bank with one profile; 77/78 also with
  * the identity custom curve, so an update keeps the saved profile. Firmware
  * <=0.3.49 does not read format 80 and falls back to an older generation in
  * the other sector (or defaults); <=0.3.45 also rejects 79, <=0.3.42 also 78. */
-#define FORMAT_VERSION 80U
+#define FORMAT_VERSION 81U
+#define PROFILE_FORMAT_VERSION 80U
 #define CURVE_FORMAT_VERSION 79U
 #define FINE_FORMAT_VERSION 78U
 #define LEGACY_FORMAT_VERSION 77U
@@ -162,7 +165,7 @@ static void make_commit(uint8_t *out, uint32_t generation, uint32_t crc)
     put32(out + 16, crc); put32(out + 20, ~crc);
     put32(out + 24, RECORD_MAGIC); put32(out + 28, ~RECORD_MAGIC);
 }
-/* Writes a format 80 record. slots[active] is refreshed from profile, so the
+/* Writes a format 81 record. slots[active] is refreshed from profile, so the
  * stored bank always matches the live configuration; a NULL bank stores the
  * live configuration as the only profile. */
 static void encode_record(uint8_t *record, const c77_config *profile, const c77_profile_bank *bank,
@@ -187,16 +190,22 @@ static int decode_record(const uint8_t *record, uint32_t size, c77_config *profi
                          uint32_t *generation, bool *output_enabled)
 {
     const uint16_t version = get16(record + 4);
-    const int large = version == FORMAT_VERSION;
-    const uint32_t payload = large ? PAYLOAD_BYTES : version == CURVE_FORMAT_VERSION ? CURVE_PAYLOAD_BYTES : OLD_PAYLOAD_BYTES;
+    const int large = version == PROFILE_FORMAT_VERSION || version == FORMAT_VERSION;
+    const uint32_t bank_bytes = version == FORMAT_VERSION ? C77_PROFILE_BANK_BYTES : C77_V80_BANK_BYTES;
+    const uint32_t payload = large ? CURVE_PAYLOAD_BYTES + bank_bytes : version == CURVE_FORMAT_VERSION ? CURVE_PAYLOAD_BYTES : OLD_PAYLOAD_BYTES;
     const uint32_t commit_offset = large ? COMMIT_OFFSET : OLD_COMMIT_OFFSET;
     if (size != (large ? RECORD_BYTES : OLD_RECORD_BYTES)) return 0;
     if (get32(record) != RECORD_MAGIC ||
-        (version != FORMAT_VERSION && version != CURVE_FORMAT_VERSION &&
+        (!large && version != CURVE_FORMAT_VERSION &&
          version != FINE_FORMAT_VERSION && version != LEGACY_FORMAT_VERSION) ||
         get16(record + 6) != payload || get32(record + 8) == 0U ||
         get32(record + 12) != record_crc(record, commit_offset)) return 0;
     if (record[16] > 1U) return 0;
+    if (version < FORMAT_VERSION) {
+        /* These bytes were reserved and had to be zero in every older format. */
+        for (unsigned i=0; i<C77_HALL; ++i)
+            if (get16(record + 32 + 22*i + 20)) return 0;
+    }
     for (unsigned i = 17; i < 32U; ++i) if (record[i] != 0U) return 0;
     for (uint32_t i = 32U + payload; i < commit_offset; i++) if (record[i]) return 0;
     c77_config decoded;
@@ -206,14 +215,13 @@ static int decode_record(const uint8_t *record, uint32_t size, c77_config *profi
        (!c77_curve_decode(decoded.curve,record+32+C77_CONFIG_BYTES) || !c77_config_valid(&decoded))) return 0;
     c77_profile_bank profiles;
     if (large) {
-        if (!c77_profiles_decode(&profiles, record + 32 + CURVE_PAYLOAD_BYTES, &decoded)) return 0;
+        if (!c77_profiles_decode(&profiles, record + 32 + CURVE_PAYLOAD_BYTES, bank_bytes, &decoded)) return 0;
         /* The active slot must hold exactly the live per-profile fields:
          * re-encoding with it refreshed from the live keys gives the same bytes. */
         static uint8_t check[C77_PROFILE_BANK_BYTES];
-        c77_profile_bank refreshed = profiles;
-        c77_profile_capture(&refreshed.slots[refreshed.active], &decoded);
-        c77_profiles_encode(&refreshed, check);
-        if (memcmp(check, record + 32 + CURVE_PAYLOAD_BYTES, sizeof check) != 0) return 0;
+        c77_profile_capture(&profiles.slots[profiles.active], &decoded);
+        c77_profiles_encode(&profiles, check);
+        if (memcmp(check, record + 32 + CURVE_PAYLOAD_BYTES, bank_bytes) != 0) return 0;
     } else {
         c77_profiles_init(&profiles, &decoded);
     }
@@ -250,7 +258,8 @@ static uint32_t sector_stride(unsigned sector)
     uint8_t head[8];
     if (!flash_read(sector * SECTOR_BYTES, head, sizeof head)) return OLD_RECORD_BYTES;
     if (all_erased(head, sizeof head)) return RECORD_BYTES;
-    return get32(head) == RECORD_MAGIC && get16(head + 4) == FORMAT_VERSION ? RECORD_BYTES : OLD_RECORD_BYTES;
+    const uint16_t version=get16(head+4);
+    return get32(head)==RECORD_MAGIC&&(version==PROFILE_FORMAT_VERSION||version==FORMAT_VERSION)?RECORD_BYTES:OLD_RECORD_BYTES;
 }
 
 static void scan_journal(scan_result_t *result)

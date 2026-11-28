@@ -23,9 +23,14 @@ Studio and the plugin together with the firmware.
 | Pointer movement (binding kind 7) | `0x400000` | 0.3.48 | 1.0.16 | 0.1.7 |
 | Roller/knob pointer acceleration | `0x800000` | 0.3.49 | 1.0.18 | 0.1.7 |
 | Four on-device profiles (command `0x4D`) | `0x1000000` | 0.4.0 | 1.1.0 | — |
+| Independent fixed release point (extended key command `0x4E`) | `0x2000000` | 0.6.0² | 1.3.0² | Unreleased |
+| Owlab Ti HE WISH distance model (curve 3, C86) | `0x4000000` | 0.6.0 | 1.3.0 | Unreleased |
 
 ¹ First public firmware release; the feature predates it. Likewise Studio
 1.0.0 and plugin 0.1.0 are the first public releases of those hosts.
+
+² Firmware 0.5.0 and Studio 1.2.0 supported fixed release during development.
+Their first public builds with this feature are firmware 0.6.0 and Studio 1.3.0.
 
 Firmware updates from Studio need the permanent C86 bootloader (0.3.0+); the
 firmware tab inside Studio arrived in Studio 1.0.15. Versioning rules for all
@@ -93,7 +98,7 @@ enable. Saving with output off writes a record readable by older firmware.
 Older firmware skips records with byte 16 set. A C86 firmware update initiated
 from a supporting app suppresses auto-enable on its first application boot.
 
-Key record22bytes: u8 key;u8 flags(bit0enabled,bit1RT,bit2calibrated,bit3retrigger-before-release);u16 released;u16 pressed;u16 actuation;u16 rt_press;u16 rt_release;u16 top_deadzone;u16 noise_deadband;u16 bottom_deadzone;u16 curve_id;u16 reserved=0. ADC0..4095. Travel0..10000 (0..1000 before0.3.43) is a normalized coordinate, not millimetres: curve0 reports normalized ADC range; curve1 reports an approximate normalized distance from the reference curve. top_deadzone<actuation<=10000; 0<=bottom_deadzone<=10000-actuation; RT distances1..10000; noise0..100; curve_id0..2 (2 needs capability `0x200000`, firmware0.3.46+). Uncalibrated equal endpoints allowed, calibrated span>=128.
+Key record22bytes: u8 key;u8 flags(bit0enabled,bit1RT,bit2calibrated,bit3retrigger-before-release);u16 released;u16 pressed;u16 actuation;u16 rt_press;u16 rt_release;u16 top_deadzone;u16 noise_deadband;u16 bottom_deadzone;u16 curve_id;u16 reserved=0. ADC0..4095. Travel0..10000 (0..1000 before0.3.43) is a normalized coordinate. Curve IDs select the linear mapping (0), Owlab reference (1), shared drawn table (2, capability `0x200000`), or C86 WISH Owlab model (3, capability `0x4000000`). top_deadzone<actuation<=10000; 0<=bottom_deadzone<=10000-actuation; RT distances1..10000; noise0..100. Uncalibrated equal endpoints allowed, calibrated span>=128.
 
 ### Optional retrigger before release (C86 v0.3.37)
 
@@ -362,6 +367,54 @@ at its slot 0, so the 576-byte records of 0.3.x stay intact as a fallback until
 that sector is next rotated. Formats 77..79 load as one profile. Firmware
 0.3.49 and older do not read format 80: after a downgrade they use the older
 generation if it still exists, otherwise defaults.
+
+### v0.6.0 WISH distance model
+
+On C86, INFO capability `0x04000000` allows curve ID 3 in the existing per-key
+configuration. All four profiles share each key's calibration and curve choice.
+The key's released and bottom ADC readings define the signal endpoints and
+polarity. Between them, the firmware interpolates a ROM table of 33 normalized
+signal values at equal physical depths, including both endpoints.
+The same distance coordinate feeds actuation, fixed release, RT and the
+travel report. Hosts multiply reported travel by the selected stroke once.
+
+The Owlab Ti HE model uses a nominal stroke of 3.4 mm and axial fields of
+120 and 750 G. The reference cylinder has a 2 mm radius and 2 mm length.
+The ratio of the endpoint fields determines an effective bottom gap. These
+dimensions describe the model, and each key still uses its measured ADC range.
+The offline generator in `tools/wish_owlab_curve.py` reproduces the table.
+[Switch specifications](https://www.qwertykeys.com/products/qk-atk-hex80-he-magnetic-gaming-keyboard) · [WISH-HE model and shim validation on its board](https://github.com/chcbaram/wish-he/blob/40682fb5af461c23e747792d41af9922b8947e43/firmware/wish-he/docs/15-distance-curve.md)
+
+Choose the curve explicitly in Studio. A host should test its capability
+before writing it or importing a profile that uses it. To return to firmware
+through 0.5.0, first select a supported curve on each key using ID 3, save,
+and verify. Earlier firmware will skip saved settings records containing ID 3.
+
+### v0.5.0 fixed release point
+
+With INFO capability `0x02000000`, command `0x4E` reads one Hall key with a
+one-byte index or writes its complete 22-byte record. Both forms return the
+22-byte record. The final two bytes (offset 20, little endian) hold
+`fixed_release` in normalized 0..10000 travel units. Other fields, busy
+handling, and write effects match GET_KEY / SET_KEY. A write validates both
+thresholds together before changing the RAM configuration.
+
+- Zero links the release point to actuation. The key presses at or above
+  actuation and releases strictly below it, preserving earlier settings.
+- A separate point must satisfy `0 < fixed_release < actuation` and
+  `fixed_release >= top_deadzone`. With RT off the key first presses at
+  actuation and remains pressed until travel is at or below the fixed point.
+  With RT on, its normal press/release distances and deadzones still apply.
+- Legacy GET_KEY returns zero in bytes 20..21. Legacy SET_KEY requires those
+  bytes to be zero and preserves any existing separate point. An incompatible
+  legacy change to actuation or the top deadzone returns BAD_CONFIG.
+- INFO config_crc covers the extended key records, bindings and custom curve.
+  When every fixed point is linked, this yields the same CRC as format 80.
+- Journal format 81 retains the 2048-byte record stride. The active key
+  records include `fixed_release`; a 112-byte suffix to the format 80 bank
+  stores the 14 little-endian thresholds for each of the four slots in order.
+  Formats 77..80 load with all release points linked. Older firmware can read
+  its previous generation while that record is still present.
 
 ### v0.3.48 pointer movement
 

@@ -66,14 +66,16 @@ def build_server(client=None):
 
     @server.tool(annotations=write, structured_output=True)
     @explain_errors
-    def keyboard_set_key(key: StrictInt, enabled: StrictBool, rapid_trigger: StrictBool, actuation: StrictInt, rt_press: StrictInt, rt_release: StrictInt, top_deadzone: StrictInt, noise_deadband: StrictInt, bottom_deadzone: StrictInt | None = None, curve_id: StrictInt | None = None, retrigger_before_release: StrictBool | None = None) -> dict[str, Any]:
-        """Change one Hall key's RAM behavior, preserve calibration. Normalized range0..10000 (1/10000 of the stroke; older firmware accepts multiples of10), noise0..100; output is disabled. Omitted bottom_deadzone/curve_id/retrigger_before_release preserve current values. Retrigger before release (default off, capability0x40000) sends synthetic release/press on partial-release/down reversal, only with RT; this interrupts long notes. Nonzero bottom needs capability0x100; curve1 approximate Owlab Ti HE needs0x200. See keyboard_curve_catalog. Requires write-enabled session."""
+    def keyboard_set_key(key: StrictInt, enabled: StrictBool, rapid_trigger: StrictBool, actuation: StrictInt, rt_press: StrictInt, rt_release: StrictInt, top_deadzone: StrictInt, noise_deadband: StrictInt, bottom_deadzone: StrictInt | None = None, curve_id: StrictInt | None = None, retrigger_before_release: StrictBool | None = None, fixed_release: StrictInt | None = None) -> dict[str, Any]:
+        """Change one Hall key's RAM behavior, preserving calibration. Normalized range 0..10000 (older firmware accepts multiples of 10), noise 0..100; output is disabled. Omitted fields preserve current values. fixed_release sets an independent threshold with RT off (capability 0x02000000); 0 links to actuation. Retrigger before release (capability 0x40000) sends release/press on partial-release/down reversal with RT and interrupts long notes. Nonzero bottom needs capability 0x100. See keyboard_curve_catalog for distance curves, including the WISH-style Owlab Ti HE model (3, capability 0x04000000). Requires write-enabled session."""
         from .protocol import integer
         integer(key,0,13,"key")
         session.require_idle()
         client = session.require_client()
         record = client.get_config()["keys"][key]
         record.update(flags=(record["flags"] & ~3)|int(enabled)|(int(rapid_trigger)<<1), actuation=actuation, rt_press=rt_press, rt_release=rt_release, top_deadzone=top_deadzone, noise_deadband=noise_deadband)
+        if fixed_release is not None:
+            record["fixed_release"] = fixed_release
         if bottom_deadzone is not None:
             record["bottom_deadzone"] = bottom_deadzone
         if curve_id is not None:

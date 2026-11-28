@@ -187,10 +187,12 @@ class HostTests(unittest.TestCase):
             t = NoIO()
             c = KeyboardClient(t, write_enabled)
             # 0x4A/0x4B are input telemetry (v0.3.44), 0x4C the custom curve (v0.3.46),
-            # 0x4D profiles (v0.4.0); 0x4E is the first unused diagnostic opcode.
-            for op in [*range(0x30, 0x37), *range(0x50, 0x57), 0x3f, 0x4e, 0, 11, 255, True, 1.0]:
+            # 0x4D profiles (v0.4.0), 0x4E extended Hall key (v0.5.0).
+            for op in [*range(0x30, 0x37), *range(0x50, 0x57), 0x3f, 0x4f, 0, 11, 255, True, 1.0]:
                 with self.assertRaisesRegex(ProtocolError, "dedicated updater"):
                     c.request(op, b"UPD3")
+            with self.assertRaisesRegex(ProtocolError, "Extended key"):
+                c.request(EXTENDED_KEY, b"UPD3")
             self.assertEqual(t.calls, 0)
             self.assertEqual(c.sequence, 0)
 

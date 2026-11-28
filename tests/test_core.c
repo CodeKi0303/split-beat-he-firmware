@@ -65,7 +65,10 @@ static void test_bottom_config_compatibility(void){
     blob[18]=1;assert(c77_config_decode(&b,blob)&&b.keys[0].curve_id==1&&b.keys[0].released==3000&&b.keys[0].pressed==1000);
     c77_config_encode(&b,blob);assert(blob[18]==1&&blob[19]==0&&blob[20]==0&&blob[21]==0);
     blob[18]=2;assert(c77_config_decode(&b,blob)&&b.keys[0].curve_id==RT_CURVE_CUSTOM);
-    blob[18]=3;assert(!c77_config_decode(&b,blob));
+    blob[18]=RT_CURVE_WISH_OWLAB_TI;
+    assert(c77_config_decode(&b,blob)==(HARDWARE_REVISION==86));
+    if(HARDWARE_REVISION==86)assert(b.keys[0].curve_id==RT_CURVE_WISH_OWLAB_TI);
+    blob[18]=4;assert(!c77_config_decode(&b,blob));
     blob[18]=0;blob[20]=1;assert(!c77_config_decode(&b,blob));
     a.keys[0].bottom_deadzone=8001;assert(!c77_config_valid(&a));
     /* Format77 (firmware <=0.3.42) records hold 0..1000 thresholds. */
@@ -130,7 +133,27 @@ static void test_reference_curve(void){
     assert(!rt_key_process(&ka,5644).pressed);
     a.enabled=false;assert(rt_key_configure(&ka,&a));
     assert(!rt_key_process(&ka,10000).pressed&&ka.travel==10000);
-    a.curve_id=3;assert(!rt_key_configure(&ka,&a));
+    a.curve_id=4;assert(!rt_key_configure(&ka,&a));
+}
+static void test_wish_owlab_distance(void){
+    rt_config_t cfg;rt_key_t key;
+    rt_config_defaults(&cfg,0,32767);
+    cfg.curve_id=RT_CURVE_WISH_OWLAB_TI;
+    cfg.actuation=5000;cfg.rt_press=cfg.rt_release=1250;
+    assert(rt_key_configure(&key,&cfg));
+    assert(rt_key_process(&key,3000).travel==2590); /* between equal-distance knots */
+    assert(!rt_key_process(&key,6930).pressed);
+    rt_result_t r=rt_key_process(&key,7690);assert(r.pressed&&r.travel==5000);
+    r=rt_key_process(&key,16330);assert(r.pressed&&r.travel==7500);
+    assert(rt_key_process(&key,12457).pressed);
+    r=rt_key_process(&key,11355);assert(!r.pressed&&r.travel==6250);
+    assert(rt_key_process(&key,16330).pressed);
+
+    /* Preserve a 1/32 ADC change that crosses a real actuation threshold. */
+    rt_config_defaults(&cfg,2206,2634);cfg.curve_id=RT_CURVE_WISH_OWLAB_TI;cfg.actuation=4861;
+    assert(rt_key_configure(&key,&cfg));
+    r=rt_key_process_q5(&key,2302U*32U);assert(!r.pressed&&r.travel==4860);
+    r=rt_key_process_q5(&key,2302U*32U+1U);assert(r.pressed&&r.travel==4861);
 }
 static void test_custom_curve(void){
     /* The identity table reproduces the linear curve exactly. */
@@ -250,9 +273,13 @@ static void test_commands(void){
     assert(r[38]==HARDWARE_REVISION&&r[39]==1&&r[13]==6&&r[14]==4&&r[15]==28);
     assert(r[8]==0&&r[9]==((FW_UPDATE_VERSION>>16)&0xffu)&&r[10]==(FW_UPDATE_VERSION&0xffu));
     assert(r[25]==(HARDWARE_REVISION==86?0x63:0x43));
+    assert(((r[27] & (C77_CAP_WISH_CURVE >> 24)) != 0U)==(HARDWARE_REVISION==86));
     assert(!e.output); /* INFO and initial connection never enable input. */
     uint8_t q[64],bad[64];packet(q,1,NULL,0);for(unsigned i=2;i<64;i++)for(unsigned b=0;b<8;b++){memcpy(bad,q,64);bad[i]^=(uint8_t)(1u<<b);assert(c77_command(&e,bad,r,now,2,1024)&&r[6]==C77_BAD_PACKET);}
-    uint8_t index=14;assert(command(3,&index,1,r)==C77_BAD_INDEX);index=0;assert(command(3,&index,1,r)==0);uint8_t key[22];memcpy(key,r+8,22);key[18]=3;assert(command(4,key,22,r)==C77_BAD_CONFIG);
+    uint8_t index=14;assert(command(3,&index,1,r)==C77_BAD_INDEX);index=0;assert(command(3,&index,1,r)==0);uint8_t key[22];memcpy(key,r+8,22);key[18]=4;assert(command(4,key,22,r)==C77_BAD_CONFIG);
+    key[18]=RT_CURVE_WISH_OWLAB_TI;
+    assert(command(4,key,22,r)==(HARDWARE_REVISION==86?C77_OK:C77_BAD_CONFIG));
+    assert(command(3,&index,1,r)==C77_OK && r[26]==(HARDWARE_REVISION==86?RT_CURVE_WISH_OWLAB_TI:RT_CURVE_LINEAR));
     setup(true);enable();index=0;assert(command(3,&index,1,r)==0);memcpy(key,r+8,22);key[6]=0xc4;key[7]=0x09;assert(command(4,key,22,r)==0&&!e.output&&e.dirty&&e.config.keys[0].actuation==2500);
     key[16]=100;assert(command(4,key,22,r)==0&&r[24]==100&&e.config.keys[0].bottom_deadzone==100&&e.keys[0].config.bottom_deadzone==100);
     key[18]=1;assert(command(4,key,22,r)==0&&r[26]==1&&e.config.keys[0].curve_id==1&&e.keys[0].config.curve_id==1&&!e.output);
@@ -268,6 +295,55 @@ static void test_commands(void){
     setup(true);e.restore_output_pending=true;now+=5001;
     assert(!c77_enable_output(&e,now)&&!e.output&&e.restore_output_pending);
     fresh(3000);assert(c77_enable_output(&e,now)&&e.output&&!e.restore_output_pending);
+}
+
+static void test_fixed_release(void)
+{
+    uint8_t reply[64],record[22],index=0;
+    setup(true);
+    assert(command(1,NULL,0,reply)==0 && (reply[27]&2));
+    assert(command(C77_OP_EXT_KEY,&index,1,reply)==0 && reply[7]==22);
+    memcpy(record,reply+8,sizeof record);
+    record[1]&=0xfdU;   /* no RT */
+    record[20]=0xe8;record[21]=3; /* 1000 / 10000 */
+    assert(command(C77_OP_EXT_KEY,record,22,reply)==0 && !memcmp(reply+8,record,22));
+    assert(e.keys[0].config.fixed_release==1000 && e.dirty && !e.output);
+    rt_key_t *key=&e.keys[0];
+    assert(!rt_key_process(key,2700).pressed); /* 1500 on the way down */
+    assert(rt_key_process(key,2600).pressed); /* press at 2000 */
+    assert(rt_key_process_q5(key,2700U*32U).pressed);
+    assert(rt_key_process(key,2799).pressed);
+    assert(!rt_key_process_q5(key,2800U*32U).pressed); /* release at exactly 1000 */
+    assert(!rt_key_process(key,2750).pressed);
+
+    /* Legacy readers/writers never see the extension or silently reset it. */
+    assert(command(3,&index,1,reply)==0 && !reply[28] && !reply[29]);
+    memcpy(record,reply+8,22);
+    record[14]=7;
+    assert(command(4,record,22,reply)==0 && e.config.keys[0].fixed_release==1000);
+    record[6]=0xe8;record[7]=3;
+    assert(command(4,record,22,reply)==C77_BAD_CONFIG && e.config.keys[0].actuation==2000);
+    record[20]=1;
+    assert(command(4,record,22,reply)==C77_BAD_CONFIG);
+    record[20]=0x2c;record[21]=1; /* release on the top deadzone boundary */
+    assert(command(C77_OP_EXT_KEY,record,22,reply)==0);
+    record[20]=0x2b;
+    assert(command(C77_OP_EXT_KEY,record,22,reply)==C77_BAD_CONFIG);
+    record[20]=record[21]=0;
+    e.save_requested=1;
+    assert(command(C77_OP_EXT_KEY,record,22,reply)==C77_BUSY);
+    assert(command(C77_OP_EXT_KEY,&index,1,reply)==0);
+    e.save_requested=0;
+    assert(command(C77_OP_EXT_KEY,record,22,reply)==0);
+    assert(rt_key_process(key,2800).pressed && rt_key_process(key,2800).pressed);
+    assert(!rt_key_process(key,2801).pressed);
+    /* An explicit fixed point is dormant when RT is enabled. */
+    record[1]|=2;record[20]=0x84;record[21]=3; /* 900 */
+    assert(command(C77_OP_EXT_KEY,record,22,reply)==0);
+    assert(rt_key_process(key,2100).pressed);
+    assert(!rt_key_process(key,2300).pressed); /* RT releases at 3500, still far above 900 in depth */
+    assert(command(C77_OP_EXT_KEY,record,21,reply)==C77_BAD_PACKET);
+    index=14;assert(command(C77_OP_EXT_KEY,&index,1,reply)==C77_BAD_INDEX);
 }
 static void test_calibration(void){
     setup(false);uint8_t p[2]={0,0},r[64];assert(command(5,p,2,r)==0&&e.cal_state==1);
@@ -595,7 +671,7 @@ static void test_fractional_rt(void)
 {
     const uint16_t endpoints[][2]={{1000,1400},{1400,1000},{2206,2634},
         {2634,2206},{0,65535},{65535,0},{0,128},{128,0}};
-    for(unsigned curve=0;curve<=1;curve++)for(unsigned pair=0;pair<8;pair++){
+    for(unsigned curve=0;curve<=RT_CURVE_WISH_OWLAB_TI;curve++)for(unsigned pair=0;pair<8;pair++){
         rt_config_t cfg;rt_config_defaults(&cfg,endpoints[pair][0],endpoints[pair][1]);
         cfg.curve_id=(uint16_t)curve;cfg.bottom_deadzone=100;
         rt_key_t whole,fraction;assert(rt_key_configure(&whole,&cfg));
@@ -643,7 +719,7 @@ static void test_fractional_rt(void)
         bad=rt_key_process_q5(&key,UINT32_MAX);assert(!bad.pressed && !bad.changed);
     }
     /* Every fractional input in the physical range remains monotonic. */
-    for(unsigned curve=0;curve<=1;curve++){
+    for(unsigned curve=0;curve<=RT_CURVE_WISH_OWLAB_TI;curve++){
         rt_config_t cfg;rt_config_defaults(&cfg,2206,2634);cfg.curve_id=(uint16_t)curve;
         rt_key_t key;assert(rt_key_configure(&key,&cfg));uint16_t previous=0;
         for(uint32_t q5=0;q5<=RT_ADC_Q5_MAX;q5++){
@@ -806,7 +882,8 @@ static void test_filtered_rt_response(void)
     assert(!e.pressed_mask && !e.keys[0].rapid_cycle && e.travel[0]==0U);
 }
 #endif
-int main(void){assert(c77_crc16((const uint8_t *)"123456789",9)==0x29b1);assert(c77_crc32((const uint8_t *)"123456789",9)==0xcbf43926u);test_both_polarities();test_bottom_deadzone();test_bottom_config_compatibility();test_reference_curve();test_custom_curve();test_custom_curve_command();test_profile_command();test_rt_and_report();test_commands();test_calibration();test_encoder_and_debounce();test_nkro_and_mouse();test_pointer();test_keyboard_completed_report();test_key_chord();test_acquisition_filter_math();test_conditioned_engine_path();test_fractional_filter();test_fractional_rt();test_normalization_cache();
+int main(void){assert(c77_crc16((const uint8_t *)"123456789",9)==0x29b1);assert(c77_crc32((const uint8_t *)"123456789",9)==0xcbf43926u);test_both_polarities();test_bottom_deadzone();test_bottom_config_compatibility();test_reference_curve();test_custom_curve();test_custom_curve_command();test_profile_command();test_rt_and_report();test_commands();test_fixed_release();test_calibration();test_encoder_and_debounce();test_nkro_and_mouse();test_pointer();test_keyboard_completed_report();test_key_chord();test_acquisition_filter_math();test_conditioned_engine_path();test_fractional_filter();test_fractional_rt();test_normalization_cache();
+test_wish_owlab_distance();
 #if SCAN_DUAL_96K
 test_fractional_engine_path();
 #endif

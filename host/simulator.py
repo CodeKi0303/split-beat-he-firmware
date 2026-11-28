@@ -19,7 +19,7 @@ class DemoTransport:
     demo = True
     serial = "DEMO-NO-USB"
 
-    def __init__(self):
+    def __init__(self, *, fixed_release_supported=False):
         self.profile = defaults()
         self.stored = None
         self.stored_output = False
@@ -37,11 +37,12 @@ class DemoTransport:
         # Wire units follow the capability word actually sent in the last INFO,
         # so tests that emulate firmware <=0.3.42 also get 0..1000 records.
         self.wire_legacy = False
+        self.fixed_release_supported = fixed_release_supported
         self.bank = self._new_bank()
         self.stored_bank = None
 
     def _profile_part(self):
-        keys = [{f: k.get(f, 0) for f in TRAVEL_FIELDS} | {"flags": k["flags"] & PROFILE_KEY_FLAGS} for k in self.profile["keys"]]
+        keys = [{f: k.get(f, 0) for f in (*TRAVEL_FIELDS, "fixed_release")} | {"flags": k["flags"] & PROFILE_KEY_FLAGS} for k in self.profile["keys"]]
         return dict(keys=keys, bindings=copy.deepcopy(self.profile["bindings"]))
 
     def _new_bank(self):
@@ -50,6 +51,10 @@ class DemoTransport:
     def _apply_part(self, part):
         for key, saved in zip(self.profile["keys"], part["keys"]):
             key.update({f: saved[f] for f in TRAVEL_FIELDS})
+            if saved["fixed_release"]:
+                key["fixed_release"] = saved["fixed_release"]
+            else:
+                key.pop("fixed_release", None)
             key["flags"] = key["flags"] & ~PROFILE_KEY_FLAGS | saved["flags"]
         self.profile["bindings"] = copy.deepcopy(part["bindings"])
 
@@ -93,8 +98,8 @@ class DemoTransport:
     def _command(self, op, p):
         if op == INFO:
             if p: raise ProtocolError("length")
-            crc = zlib.crc32(b"".join(encode_key(k) for k in self.profile["keys"])+b"".join(encode_binding(b) for b in self.profile["bindings"]))
-            return struct.pack("<8B5IH4B", 0,3,41,0,14,6,4,28,64000,125,0x33f | CAP_KEY_CHORD | CAP_SAVE_OUTPUT | CAP_RETRIGGER_BEFORE_RELEASE | CAP_FINE_TRAVEL | CAP_POINTER | CAP_POINTER_ACCEL | CAP_PROFILES, self.generation,crc,1024,86,1,2,bool(self.stored))
+            crc = zlib.crc32(b"".join(encode_key(k, extended=True) for k in self.profile["keys"])+b"".join(encode_binding(b) for b in self.profile["bindings"]))
+            return struct.pack("<8B5IH4B", 0,3,41,0,14,6,4,28,64000,125,0x33f | CAP_KEY_CHORD | CAP_SAVE_OUTPUT | CAP_RETRIGGER_BEFORE_RELEASE | CAP_FINE_TRAVEL | CAP_POINTER | CAP_POINTER_ACCEL | CAP_PROFILES | (CAP_FIXED_RELEASE if self.fixed_release_supported else 0), self.generation,crc,1024,86,1,2,bool(self.stored))
         if op == STATUS:
             if len(p) != 1 or p[0] > 1: raise ProtocolError("side")
             elapsed = time.monotonic()-self.start
@@ -124,19 +129,28 @@ class DemoTransport:
             if self.wire_legacy:
                 travel = [(v + LEGACY_TRAVEL_SCALE // 2) // LEGACY_TRAVEL_SCALE for v in travel]
             return struct.pack("<4I14H4BIH", int(elapsed*1000),int(elapsed*64000),0,100,*raw,*travel,0,flags,self.cal["key"],self.cal["state"],self.pressed_mask,0)
-        if op == GET_KEY:
+        if op == EXTENDED_KEY and not self.fixed_release_supported:
+            raise ProtocolError("Unsupported extended key command")
+        if op == GET_KEY or (op == EXTENDED_KEY and len(p) == 1):
             if len(p) != 1: raise ProtocolError("length")
-            return encode_key(self.profile["keys"][p[0]], self.wire_legacy)
+            record = dict(self.profile["keys"][p[0]])
+            if op == GET_KEY:
+                record.pop("fixed_release", None)
+            return encode_key(record, self.wire_legacy, extended=op == EXTENDED_KEY)
         if op == GET_BINDING:
             if len(p) != 1: raise ProtocolError("length")
             return encode_binding(self.profile["bindings"][p[0]])
-        if op == SET_KEY:
-            d = decode_key(p, self.wire_legacy)
+        if op in (SET_KEY, EXTENDED_KEY):
+            d = decode_key(p, self.wire_legacy, extended=op == EXTENDED_KEY)
+            reply = encode_key(d, self.wire_legacy, extended=op == EXTENDED_KEY)
+            if op == SET_KEY:
+                previous = self.profile["keys"][d["key"]].get("fixed_release", 0)
+                d = key_record({**d, "fixed_release": previous})
             self.profile["keys"][d["key"]] = d
             self.models.pop(d["key"], None)
             self.pressed_mask &= ~(1 << d["key"])
             self.enabled, self.dirty = False, True
-            return encode_key(d, self.wire_legacy)
+            return reply
         if op == SET_BINDING:
             d = decode_binding(p)
             self.profile["bindings"][d["input"]] = d

@@ -134,14 +134,18 @@ class KeyboardClient:
         # The dedicated FirmwareUpdater owns update permission and sequencing.
         # Even right-side update INFO changes relay/output state, so unknown
         # opcodes must never bypass the normal configuration mutation gate.
-        if type(op) is not int or not (1 <= op <= 10 or 0x40 <= op <= PROFILE):
+        if type(op) is not int or not (1 <= op <= 10 or 0x40 <= op <= PROFILE or op == EXTENDED_KEY):
             raise ProtocolError("Unsupported configuration opcode; firmware updates require the dedicated updater")
         mutates = (op in MUTATIONS or (op in (ADC_TUNING, ADC_PAIR, CUSTOM_CURVE) and bool(payload))
                    or (op == PROFILE and bool(payload) and payload[0] >= 2))
+        if op == EXTENDED_KEY:
+            if len(payload) not in (1, 22):
+                raise ProtocolError("Extended key requires a key index or a full key record")
+            mutates = len(payload) == 22
         if mutates and not self.write_enabled:
             raise PermissionError("read-only session: restart with --write-enabled for configuration changes")
         with self.lock:
-            if (mutates or op in (ADC_TUNING, ADC_COMPARE, ADC_PAIR, TELEMETRY_CONTROL, TELEMETRY_READ, CUSTOM_CURVE, PROFILE)) and not self.identified:
+            if (mutates or op in (EXTENDED_KEY, ADC_TUNING, ADC_COMPARE, ADC_PAIR, TELEMETRY_CONTROL, TELEMETRY_READ, CUSTOM_CURVE, PROFILE)) and not self.identified:
                 self.info()
             if op == PROFILE and not self.device_info["capabilities"] & CAP_PROFILES:
                 raise ProtocolError("This firmware does not support profiles (0.4.0+)")
@@ -157,8 +161,11 @@ class KeyboardClient:
                 raise ProtocolError("This firmware does not support paired ADC tuning")
             if op == SET_BINDING:
                 require_binding_capability(decode_binding(payload), self.device_info["capabilities"])
-            if op == SET_KEY:
-                require_key_capability(decode_key(payload, self.legacy_travel()), self.device_info["capabilities"])
+            if op == EXTENDED_KEY and not self.device_info["capabilities"] & CAP_FIXED_RELEASE:
+                raise ProtocolError("Independent fixed release requires capability 0x02000000")
+            if op in (SET_KEY, EXTENDED_KEY) and mutates:
+                record = decode_key(payload, self.legacy_travel(), extended=op == EXTENDED_KEY)
+                require_key_capability(record, self.device_info["capabilities"])
             self.sequence = (self.sequence % 65535)+1
             seq = self.sequence
             try:
@@ -277,7 +284,9 @@ class KeyboardClient:
     def get_config(self):
         with self.lock:
             legacy = self.legacy_travel()
-            keys = [decode_key(self.request(GET_KEY, bytes([i])), legacy) for i in range(14)]
+            extended = bool(self.device_info["capabilities"] & CAP_FIXED_RELEASE)
+            opcode = EXTENDED_KEY if extended else GET_KEY
+            keys = [decode_key(self.request(opcode, bytes([i])), legacy, extended=extended) for i in range(14)]
             bindings = [decode_binding(self.request(GET_BINDING, bytes([i]))) for i in range(28)]
             return validate_profile(dict(schema="c77-profile-v1", board="C77", travel_max=TRAVEL_MAX, keys=keys, bindings=bindings))
 
@@ -285,7 +294,10 @@ class KeyboardClient:
         with self.lock:
             legacy = self.legacy_travel()
             require_key_capability(key_record(value), self.device_info["capabilities"])
-            return decode_key(self.request(SET_KEY, encode_key(value, legacy)), legacy)
+            extended = bool(self.device_info["capabilities"] & CAP_FIXED_RELEASE)
+            opcode = EXTENDED_KEY if extended else SET_KEY
+            payload = encode_key(value, legacy, extended=extended)
+            return decode_key(self.request(opcode, payload), legacy, extended=extended)
 
     def set_binding(self, value):
         return decode_binding(self.request(SET_BINDING, encode_binding(value)))

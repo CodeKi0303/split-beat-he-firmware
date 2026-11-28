@@ -44,6 +44,14 @@ for (const v of vectors) {
         response.payload,
       );
       break;
+    case 0x4e: {
+      const key = decodeKey(response.payload, false, true);
+      if (request.payload.length === 22) {
+        assert.deepEqual(key, decodeKey(request.payload, false, true));
+      }
+      assert.deepEqual(encodeKey(key, false, true), response.payload);
+      break;
+    }
     case 9:
     case 10:
       assert.deepEqual(
@@ -53,7 +61,7 @@ for (const v of vectors) {
       break;
   }
 }
-for (const op of [1, 2, 3, 4, 5, 7, 9, 10]) assert.ok(kinds.has(op));
+for (const op of [1, 2, 3, 4, 5, 7, 9, 10, 0x4e]) assert.ok(kinds.has(op));
 console.log(
   `C core -> Python -> JS golden codec exchanges PASS (${vectors.length})`,
 );

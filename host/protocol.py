@@ -26,6 +26,10 @@ LEGACY_TRAVEL_MAX = 1000
 LEGACY_TRAVEL_SCALE = TRAVEL_MAX // LEGACY_TRAVEL_MAX
 TRAVEL_FIELDS = ("actuation", "rt_press", "rt_release", "top_deadzone", "bottom_deadzone")
 ADC_TUNING, ADC_COMPARE, ADC_PAIR = 0x47, 0x48, 0x49
+CAP_FIXED_RELEASE = 0x02000000
+CAP_WISH_CURVE = 0x04000000
+CURVE_WISH_OWLAB_TI = 3
+EXTENDED_KEY = 0x4E
 CAP_TELEMETRY = 0x100000
 TELEMETRY_CONTROL, TELEMETRY_READ = 0x4A, 0x4B
 # Firmware 0.3.46+: curve_id 2 selects one shared user-drawn table. Command 0x4C
@@ -121,7 +125,7 @@ def unpack_packet(data):
 
 def key_record(value):
     required = set(KEY_FIELDS) - {"bottom_deadzone", "curve_id"}
-    if not isinstance(value, dict) or not required <= set(value) <= set(KEY_FIELDS):
+    if not isinstance(value, dict) or not required <= set(value) <= (set(KEY_FIELDS) | {"fixed_release"}):
         raise ProtocolError("key record fields do not match schema")
     d = {k: integer(value.get(k, 0), 0, 65535, k) for k in KEY_FIELDS}
     integer(d["key"], 0, 13, "key")
@@ -133,30 +137,40 @@ def key_record(value):
     integer(d["top_deadzone"], 0, d["actuation"]-1, "top_deadzone")
     integer(d["bottom_deadzone"], 0, TRAVEL_MAX-d["actuation"], "bottom_deadzone")
     integer(d["noise_deadband"], 0, 100, "noise_deadband")
-    integer(d["curve_id"], 0, 2, "curve_id")
+    integer(d["curve_id"], 0, CURVE_WISH_OWLAB_TI, "curve_id")
+    release = integer(value.get("fixed_release", 0), 0, TRAVEL_MAX, "fixed_release")
+    if release:
+        if not d["top_deadzone"] <= release < d["actuation"]:
+            raise ProtocolError("fixed_release must be at least top_deadzone and shallower than actuation, or 0 to link")
+        d["fixed_release"] = release
     if d["flags"] & 4 and abs(d["pressed"]-d["released"]) < 128:
         raise ProtocolError("calibrated span must be >=128")
     return d
 
 
-def encode_key(value, legacy=False):
+def encode_key(value, legacy=False, *, extended=False):
     """legacy=True encodes for firmware without CAP_FINE_TRAVEL (0..1000 units)."""
     d = key_record(value)
+    release = d.get("fixed_release", 0)
+    if release and (legacy or not extended):
+        raise ProtocolError("Independent fixed release requires the extended key command (0x4E)")
     if legacy:
         for k in TRAVEL_FIELDS:
             if d[k] % LEGACY_TRAVEL_SCALE:
                 raise ProtocolError(f"{k}: this firmware stores 1/1000 of the stroke; 0.001 mm steps need firmware 0.3.43+ (capability 0x80000); no device mutation performed")
             d[k] //= LEGACY_TRAVEL_SCALE
-    return struct.pack("<BB10H", *(d[k] for k in KEY_FIELDS), 0)
+    return struct.pack("<BB10H", *(d[k] for k in KEY_FIELDS), release)
 
 
-def decode_key(data, legacy=False):
+def decode_key(data, legacy=False, *, extended=False):
     if len(data) != 22:
         raise ProtocolError("key reply length")
     v = struct.unpack("<BB10H", data)
-    if v[-1]:
+    if v[-1] and (not extended or legacy):
         raise ProtocolError("key reserved bytes")
     d = dict(zip(KEY_FIELDS, v))
+    if v[-1]:
+        d["fixed_release"] = v[-1]
     if legacy:
         if any(d[k] > LEGACY_TRAVEL_MAX for k in TRAVEL_FIELDS):
             raise ProtocolError("legacy key record outside 0..1000")
@@ -166,6 +180,8 @@ def decode_key(data, legacy=False):
 
 
 def require_key_capability(key, capabilities):
+    if key.get("fixed_release") and not capabilities & CAP_FIXED_RELEASE:
+        raise ProtocolError("Independent fixed release requires capability 0x02000000")
     if key["flags"] & 8 and not capabilities & CAP_RETRIGGER_BEFORE_RELEASE:
         raise ProtocolError("Retrigger before release requires capability 0x40000; no device mutation performed")
     if key.get("bottom_deadzone", 0) and not capabilities & CAP_BOTTOM_DEADZONE:
@@ -174,6 +190,8 @@ def require_key_capability(key, capabilities):
         raise ProtocolError("Nonlinear Hall curve requires firmware 0.3.5+ capability 0x200; no device mutation performed")
     if key.get("curve_id", 0) == 2 and not capabilities & CAP_CUSTOM_CURVE:
         raise ProtocolError("Custom Hall curve requires firmware 0.3.46+ capability 0x200000; no device mutation performed")
+    if key.get("curve_id") == CURVE_WISH_OWLAB_TI and not capabilities & CAP_WISH_CURVE:
+        raise ProtocolError("WISH-style Owlab Ti HE curve requires C86 capability 0x04000000")
 
 
 def encode_profile_name(name):
@@ -339,7 +357,7 @@ def validate_profile(profile):
             if not isinstance(k, dict):
                 raise ProtocolError("key record fields do not match schema")
             k = dict(k)
-            for name in TRAVEL_FIELDS:
+            for name in (*TRAVEL_FIELDS, "fixed_release"):
                 if name in k:
                     integer(k[name], 0, LEGACY_TRAVEL_MAX, name)
                     k[name] *= LEGACY_TRAVEL_SCALE

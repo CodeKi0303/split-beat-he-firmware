@@ -70,20 +70,24 @@ bool c77_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t now,ui
         out[0]=C77_PROFILES;out[1]=b->active;out[2]=b->used;length=3;goto done;
     }
     const uint8_t sizes[11]={255,0,1,1,22,2,1,0,0,1,6};
-    if(q[3]==0||q[3]>10){status=C77_BAD_COMMAND;goto done;}
-    if(q[7]!=sizes[q[3]]){status=C77_BAD_PACKET;goto done;}
-    if(e->save_requested&&q[3]!=1&&q[3]!=2&&q[3]!=3&&q[3]!=9&&!(q[3]==6&&in[0]==0)){status=C77_BUSY;goto done;}
-    if(e->cal_state&&(q[3]==4||q[3]==7||q[3]==8||q[3]==10)){status=C77_BUSY;goto done;}
-    switch(q[3]){
+    const bool extended_key=q[3]==C77_OP_EXT_KEY;
+    const unsigned op=extended_key?(q[7]==1?3:4):q[3];
+    if(op==0||op>10){status=C77_BAD_COMMAND;goto done;}
+    if(q[7]!=sizes[op]){status=C77_BAD_PACKET;goto done;}
+    if(e->save_requested&&op!=1&&op!=2&&op!=3&&op!=9&&!(op==6&&in[0]==0)){status=C77_BUSY;goto done;}
+    if(e->cal_state&&(op==4||op==7||op==8||op==10)){status=C77_BUSY;goto done;}
+    switch(op){
     case 1:
         out[0]=(uint8_t)((FW_UPDATE_VERSION>>24)&255U);out[1]=(uint8_t)((FW_UPDATE_VERSION>>16)&255U);out[2]=(uint8_t)(FW_UPDATE_VERSION&255U);
         out[3]=0;out[4]=14;out[5]=6;out[6]=4;out[7]=28;p32(out+8,SCAN_TARGET_HZ);p32(out+12,speed==2?125:1000);
         uint32_t capabilities=(HARDWARE_REVISION==86?0x3ffu:0x33fu)|C77_CAP_SAVE_OUTPUT|C77_CAP_FINE_TRAVEL|C77_CAP_CUSTOM_CURVE|C77_CAP_POINTER|C77_CAP_POINTER_ACCEL|C77_CAP_PROFILES;
+        capabilities|=C77_CAP_FIXED_RELEASE;
 #if SCAN_ADC_PHASE_PAIR
         p32(out+8,adc_scan_rate());
         capabilities|=C77_CAP_ADC_TUNING|C77_CAP_ADC_PAIR|C77_CAP_ADC_PAIR_READ;
 #endif
 #if HARDWARE_REVISION == 86
+        capabilities|=C77_CAP_WISH_CURVE;
         capabilities|=C77_CAP_KEY_CHORD;
         capabilities|=C77_CAP_RETRIGGER;
 #endif
@@ -106,14 +110,19 @@ bool c77_command(c77_engine *e,const uint8_t q[64],uint8_t r[64],uint32_t now,ui
         for(unsigned i=0;i<7;i++){p16(out+16+i*2,s->raw[i]);p16(out+30+i*2,e->travel[side*7+i]);}
         out[44]=s->digital;out[45]=(uint8_t)(e->output|(c77_source_fresh(e,side,now)?2:0)|(e->dirty?4:0)|(e->stored_valid?8:0));out[46]=e->cal_key;out[47]=e->cal_state;p32(out+48,e->pressed_mask);length=54;break;}
     case 3:case 9:{
-        unsigned maximum=q[3]==3?14:28;if(in[0]>=maximum){status=C77_BAD_INDEX;break;}
-        c77_config_encode(&e->config,blob);length=q[3]==3?22:6;memcpy(out,blob+(q[3]==3?in[0]*22:308+in[0]*6),length);break;}
+        unsigned maximum=op==3?14:28;if(in[0]>=maximum){status=C77_BAD_INDEX;break;}
+        c77_config_encode(&e->config,blob);length=op==3?22:6;memcpy(out,blob+(op==3?in[0]*22:308+in[0]*6),length);
+        if(op==3&&!extended_key)p16(out+20,0);
+        break;}
     case 4:case 10:{
-        unsigned maximum=q[3]==4?14:28;if(in[0]>=maximum){status=C77_BAD_INDEX;break;}
-        c77_config_encode(&e->config,blob);length=q[3]==4?22:6;unsigned offset=q[3]==4?in[0]*22:308+in[0]*6;memcpy(blob+offset,in,length);
+        unsigned maximum=op==4?14:28;if(in[0]>=maximum){status=C77_BAD_INDEX;break;}
+        const bool legacy_key=op==4&&!extended_key;
+        if(legacy_key&&g16(in+20)){status=C77_BAD_CONFIG;break;}
+        c77_config_encode(&e->config,blob);length=op==4?22:6;unsigned offset=op==4?in[0]*22:308+in[0]*6;
+        memcpy(blob+offset,in,legacy_key?20:length);
         c77_config candidate;if(!c77_config_decode(&candidate,blob)){status=C77_BAD_CONFIG;length=0;break;}
         memcpy(candidate.curve,e->config.curve,sizeof candidate.curve);
-        e->config=candidate;c77_reconfigure(e);memcpy(out,blob+offset,length);break;}
+        e->config=candidate;c77_reconfigure(e);memcpy(out,in,length);break;}
     case 5:{
         unsigned key=in[0],action=in[1];if(key>=14){status=C77_BAD_INDEX;break;}if(action>3){status=C77_BAD_CONFIG;break;}
         if(action==3){c77_disable(e);e->cal_key=255;e->cal_state=0;}

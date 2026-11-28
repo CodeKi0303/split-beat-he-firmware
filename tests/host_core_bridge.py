@@ -45,13 +45,20 @@ def main():
         assert info['capabilities'] & CAP_BOTTOM_DEADZONE
         key={**profile['keys'][0],'actuation':350,'rt_press':55,'rt_release':65,'bottom_deadzone':125}
         assert c.set_key(key)==key
+        fixed={**key,'fixed_release':349}
+        assert c.set_key(fixed)==fixed
+        # Existing clients still exchange reserved-zero records even with an
+        # independent release configured. Their unrelated edits preserve it.
+        assert decode_key(c.request(GET_KEY, bytes([0])))==key
+        assert decode_key(c.request(SET_KEY, encode_key(key)))==key
+        assert c.get_config()['keys'][0]==fixed
         c.calibrate(0,'capture_rest')
         assert c.status()['calibration_state']==2
         c.calibrate(0,'capture_press')
         assert c.status()['calibration_state']==4
         c.calibrate(0,'commit')
         k=c.get_config()['keys'][0]
-        assert k['flags']&4 and abs(k['released']-k['pressed'])>=128 and k['bottom_deadzone']==125
+        assert k['flags']&4 and abs(k['released']-k['pressed'])>=128 and k['bottom_deadzone']==125 and k['fixed_release']==349
         binding=dict(input=20,kind=3,code=-1,modifiers=0)
         assert c.set_binding(binding)==binding
         assert c.get_config()['bindings'][20]==binding

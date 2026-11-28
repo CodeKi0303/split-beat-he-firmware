@@ -18,6 +18,8 @@ enum {
     RT_CURVE_OWLAB_TI_REFERENCE = 1,
     /* 0.3.46+: one user-drawn monotonic table shared by every key using it. */
     RT_CURVE_CUSTOM = 2,
+    /* C86: Owlab Ti HE cylinder-magnet model, nominal 3.4 mm stroke. */
+    RT_CURVE_WISH_OWLAB_TI = 3,
     /* Fixed signal grid 0, 625, ..., 10000; only the 15 inner outputs are
      * stored (the endpoints are always 0 and RT_TRAVEL_MAX). */
     RT_CUSTOM_CURVE_POINTS = 15,
@@ -41,6 +43,7 @@ typedef struct {
     bool enabled;
     bool rapid_trigger_enabled;
     bool retrigger_before_release;
+    uint16_t fixed_release; /* 0 follows actuation; otherwise RT-off release at/below this depth. */
 } rt_config_t;
 
 typedef struct {
@@ -81,8 +84,8 @@ void rt_config_defaults(rt_config_t *config, uint16_t adc_released,
  * Invalid configuration disables processing and returns false. Required:
  * abs(ADC span) >= 128; top_deadzone < actuation <= RT_TRAVEL_MAX;
  * 0 <= bottom_deadzone <= RT_TRAVEL_MAX - actuation;
- * curve_id is RT_CURVE_LINEAR, RT_CURVE_OWLAB_TI_REFERENCE or RT_CURVE_CUSTOM
- * (custom_curve non-decreasing within 0..RT_TRAVEL_MAX);
+ * curve_id is RT_CURVE_LINEAR, RT_CURVE_OWLAB_TI_REFERENCE, RT_CURVE_CUSTOM
+ * (custom_curve non-decreasing within 0..RT_TRAVEL_MAX), or RT_CURVE_WISH_OWLAB_TI;
  * 1 <= rt_press, rt_release <= RT_TRAVEL_MAX. */
 bool rt_key_configure(rt_key_t *key, const rt_config_t *config);
 /* Header-only so settings/config code does not link the RT engine. */
@@ -124,7 +127,8 @@ void rt_key_reset(rt_key_t *key);
  * at/above MAX-bottom_deadzone. The middle is not rescaled. Internal RT travel
  * and extrema retain the selected curve's normalized sample value, so this
  * reporting rule does not change presses/releases/retrigger decisions.
- * With RT off, press at/above actuation and release below actuation.
+ * With RT off, press at/above actuation. If fixed_release is zero, release
+ * below actuation as on older firmware. Otherwise release at/below fixed_release.
  * Disabled keys use the same reported endpoint rule, but are always released.
  * changed describes only this call's pressed-state transition.
  * Optional retrigger_before_release (default false): while held outside the

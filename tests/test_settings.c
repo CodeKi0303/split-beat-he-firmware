@@ -101,6 +101,28 @@ int main(void){
     put16(record+32+CURVE_PAYLOAD_BYTES+2+1*C77_PROFILE_BYTES+2*11+1,778);reseal(record);
     assert(!decode_record(record,RECORD_BYTES,NULL,NULL,NULL,NULL));
 
+    /* Format 80 has the same record stride and the original bank prefix.
+     * Loading all four slots must preserve their data and select coupled release. */
+    put16(memory+4,PROFILE_FORMAT_VERSION);
+    put16(memory+6,CURVE_PAYLOAD_BYTES+C77_V80_BANK_BYTES);
+    reseal(memory);
+    assert(settings_store_load(&loaded_live,&loaded,&gen,&output)&&gen==1&&output);
+    assert(loaded.used==0x0b&&loaded.active==1&&loaded.slots[1].keys[2].actuation==777);
+    assert(loaded_live.keys[2].fixed_release==0 && !memcmp(loaded.slots[0].name,"Game",5));
+    loaded_live.keys[2].fixed_release=443;
+    loaded.slots[3].keys[4].fixed_release=1234;
+    assert(settings_store_save(&loaded_live,&loaded,&gen,true)&&gen==2);
+    assert(get16(memory+RECORD_BYTES+4)==FORMAT_VERSION);
+    assert(settings_store_load(&loaded_live,&loaded,&gen,NULL)&&gen==2);
+    assert(loaded_live.keys[2].fixed_release==443 && loaded.slots[1].keys[2].fixed_release==443);
+    assert(c77_profile_apply(&loaded_live,&loaded.slots[3]));
+    assert(loaded_live.keys[2].fixed_release==0 && loaded_live.keys[4].fixed_release==1234);
+    /* A CRC-correct record with a different release in its active slot is invalid. */
+    memcpy(record,memory+RECORD_BYTES,RECORD_BYTES);
+    put16(record+32+CURVE_PAYLOAD_BYTES+C77_V80_BANK_BYTES+2*(C77_HALL+2),444);
+    reseal(record);
+    assert(!decode_record(record,RECORD_BYTES,NULL,NULL,NULL,NULL));
+
     /* An update from firmware <=0.3.42 keeps the saved profile: format77
      * thresholds load x10. The first format80 save goes to a freshly erased
      * other sector, so the 576-byte records stay readable by older firmware. */
@@ -148,5 +170,5 @@ int main(void){
     reseal(latest);
     assert(settings_store_load(&again,NULL,&migrated_gen,NULL)&&migrated_gen==21);
     layout=0;assert(!settings_store_load(&a,NULL,NULL,NULL)&&settings_store_last_error()==SETTINGS_ERROR_LAYOUT);assert(!settings_store_save(&b,NULL,NULL,false));layout=1;ready=0;assert(!settings_store_save(&b,NULL,NULL,false)&&settings_store_last_error()==SETTINGS_ERROR_CACHE);
-    puts("settings: CRC/commit,torn-write cases,sector rotation,format77/78/79 migration into format80,four-profile bank,layout guard PASS");return 0;
+    puts("settings: CRC/commit,torn-write cases,sector rotation,formats 77..80 migration,per-profile fixed release,layout guard PASS");return 0;
 }

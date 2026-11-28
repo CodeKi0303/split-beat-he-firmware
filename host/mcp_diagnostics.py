@@ -16,8 +16,8 @@ from .performance import (PERFORMANCE, LINK_PERFORMANCE, LINK_FIELDS, ADC_DIAGNO
                           ADC_IRQ_PROFILE, decode_adc_irq_profile_begin, decode_adc_irq_profile_page,
                           decode_performance, decode_link_performance, decode_adc_diagnostics,
                           compare_samples, delta32)
-from .protocol import integer, CAP_ADC_TRACE, CAP_CPU_PROFILE, CAP_ADC_IRQ_PROFILE, CAP_KEY_CHORD, CAP_RETRIGGER_BEFORE_RELEASE, CAP_FINE_TRAVEL, TRAVEL_MAX
-from .hall_curve import normalized_to_mm, raw_to_estimated_mm
+from .protocol import integer, CAP_FIXED_RELEASE, CAP_WISH_CURVE, CAP_ADC_TRACE, CAP_CPU_PROFILE, CAP_ADC_IRQ_PROFILE, CAP_KEY_CHORD, CAP_RETRIGGER_BEFORE_RELEASE, CAP_FINE_TRAVEL, TRAVEL_MAX
+from .hall_curve import CURVE_CUSTOM, normalized_to_mm, raw_to_estimated_mm
 
 
 def duration(value):
@@ -32,12 +32,14 @@ def capture_sensors(client, duration_seconds=2.0, sample_hz=20, include_samples=
     integer(sample_hz, 5, 50, "sample_hz")
     if type(include_samples) is not bool:
         raise ValueError("include_samples must be boolean")
-    info_before, config = None, None
+    info_before, config, custom_curve = None, None, None
     if total_travel_mm is not None:
         from .mcp_configuration import validate_travel
         total_travel_mm = validate_travel(total_travel_mm)
         info_before = client.info()
         config = client.get_config()
+        if include_samples and any(k.get("curve_id") == CURVE_CUSTOM for k in config["keys"]):
+            custom_curve = client.custom_curve()
     rows = [[] for _ in range(14)]
     sequences = [None, None]
     snapshots, start = [], clock()
@@ -70,7 +72,7 @@ def capture_sensors(client, duration_seconds=2.0, sample_hz=20, include_samples=
             if total_travel_mm is not None:
                 # STATUS travel already includes the selected firmware curve.
                 row["travel_mm"] = [normalized_to_mm(t, total_travel_mm[k]) for k, t in enumerate(row["travel"])]
-                row["raw_estimated_mm"] = [raw_to_estimated_mm(raw, config["keys"][k], total_travel_mm[k]) for k, raw in enumerate(row["raw"])]
+                row["raw_estimated_mm"] = [raw_to_estimated_mm(raw, config["keys"][k], total_travel_mm[k], custom_curve) for k, raw in enumerate(row["raw"])]
             snapshots.append(row)
         if clock() - start >= seconds:
             break
@@ -111,8 +113,11 @@ def capture_key_timing(client, key, duration_seconds=5.0, sample_hz=100, include
     key_config = client.get_config()["keys"][key]
     if key_config["flags"] & 10 == 10:
         raise DeviceError("Turn off retrigger_before_release before timing analysis: STATUS snapshots do not expose synthetic USB release/press pulses. Raw sensor diagnostics remain available.")
+    custom_curve = None
     if total_travel_mm is not None:
         normalized_to_mm(0, total_travel_mm)  # validate metadata before capture
+        if key_config.get("curve_id") == CURVE_CUSTOM:
+            custom_curve = client.custom_curve()
     start = clock()
     rows, edges, holds, issues = [], [], [], []
     counts = dict(duplicates=0, stale=0, resets=0, gaps=0, invalid=0)
@@ -179,7 +184,7 @@ def capture_key_timing(client, key, duration_seconds=5.0, sample_hz=100, include
                            pressed=bool(mask & (1 << key)), segment=segment)
                 if total_travel_mm is not None:
                     row["travel_mm"] = normalized_to_mm(travel, total_travel_mm)
-                    row["raw_estimated_mm"] = raw_to_estimated_mm(raw, key_config, total_travel_mm)
+                    row["raw_estimated_mm"] = raw_to_estimated_mm(raw, key_config, total_travel_mm, custom_curve)
                 if previous is not None and row["pressed"] != previous["pressed"]:
                     event = dict(type="press" if row["pressed"] else "release",
                                  time_ms=(previous["estimated_sample_ms"]+estimated)/2,
@@ -230,8 +235,10 @@ def capability_summary(info):
     return {"mouse_button_mapping": bool(caps & 0x20),
             "keyboard_chord_mapping": bool(caps & CAP_KEY_CHORD),
             "retrigger_before_release": bool(caps & CAP_RETRIGGER_BEFORE_RELEASE),
+            "fixed_release": bool(caps & CAP_FIXED_RELEASE),
             "bottom_deadzone": bool(caps & 0x100),
             "nonlinear_hall_curve": bool(caps & 0x200),
+            "wish_owlab_ti_curve": bool(caps & CAP_WISH_CURVE),
             "firmware_update_protocol": bool(caps & 0x40),
             "device_performance_counters": bool(caps & 0x80),
             "link_performance_counters": bool(caps & 0x80) and version >= (0, 3, 2),

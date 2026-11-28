@@ -12,13 +12,15 @@ int main(void)
     static const uint16_t drawn[RT_CUSTOM_CURVE_POINTS] = {
         150, 350, 650, 1050, 1550, 2150, 2850, 3650, 4550, 5500, 6450, 7400, 8300, 9100, 9700
     };
+    static const uint16_t curves[] = {RT_CURVE_LINEAR, RT_CURVE_OWLAB_TI_REFERENCE,
+        RT_CURVE_CUSTOM, RT_CURVE_CUSTOM, RT_CURVE_WISH_OWLAB_TI};
     puts("[");
     for (unsigned e = 0; e < sizeof endpoints / sizeof endpoints[0]; ++e) {
-        for (unsigned curve = 0; curve < 4; ++curve) {
+        for (unsigned curve = 0; curve < sizeof curves / sizeof curves[0]; ++curve) {
             rt_config_t config;
             rt_key_t key;
             rt_config_defaults(&config, endpoints[e][0], endpoints[e][1]);
-            config.curve_id = (uint16_t)(curve < 2 ? curve : RT_CURVE_CUSTOM);
+            config.curve_id = curves[curve];
             if (curve == 3) for (unsigned i = 0; i < RT_CUSTOM_CURVE_POINTS; ++i) config.custom_curve[i] = drawn[i];
             config.enabled = false;
             if (!rt_key_configure(&key, &config)) return 2;

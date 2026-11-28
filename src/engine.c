@@ -5,6 +5,7 @@
 static void install(c77_engine *e,unsigned i){
     const c77_key_config *k=&e->config.keys[i];
     rt_config_t c={.adc_released=k->released,.adc_pressed=k->pressed,.actuation=k->actuation,.rt_press=k->rt_press,.rt_release=k->rt_release,.top_deadzone=k->top_deadzone,.bottom_deadzone=k->bottom_deadzone,.curve_id=k->curve_id,.enabled=(k->flags&5)==5,.rapid_trigger_enabled=(k->flags&2)!=0,.retrigger_before_release=(k->flags&C77_KEY_RETRIGGER)!=0};
+    c.fixed_release=k->fixed_release;
     memcpy(c.custom_curve,e->config.curve,sizeof c.custom_curve);
     (void)rt_key_configure(&e->keys[i],&c);
 }

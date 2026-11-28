@@ -27,7 +27,10 @@ class SampledRT:
             self.pressed = self.rapid = False
             self.extreme = travel
         elif not c["flags"] & 2:
-            self.pressed = travel >= c["actuation"]
+            if was_pressed and c.get("fixed_release"):
+                self.pressed = travel > c["fixed_release"]
+            else:
+                self.pressed = travel >= c["actuation"]
             self.rapid = False
             self.extreme = travel
         elif c["bottom_deadzone"] and travel >= TRAVEL_MAX - c["bottom_deadzone"]:

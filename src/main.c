@@ -264,7 +264,8 @@ int main(void){
                     response_pending=1;CPU_PROFILE_END(prof_vendor,CPU_PROF_VENDOR);continue;
                 }
 #endif
-                if(fw_runtime_maintenance()&&request[3]!=1&&request[3]!=2&&request[3]!=3&&request[3]!=9){
+                if(fw_runtime_maintenance()&&request[3]!=1&&request[3]!=2&&request[3]!=3&&request[3]!=9&&
+                   !(request[3]==C77_OP_EXT_KEY&&request[7]==1)){
                     /* No settings save/reset/enable during an interrupted
                      * satellite update. Local UPDATE_RUN exits explicitly. */
                     if(performance_busy_reply(request,response))response_pending=1;

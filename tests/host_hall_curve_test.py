@@ -3,11 +3,11 @@ from copy import deepcopy
 import unittest
 
 from host.client import KeyboardClient
-from host.hall_curve import (curve_catalog, normalized_from_raw, normalized_to_mm,
+from host.hall_curve import (WISH_OWLAB_SIGNAL_Q15, curve_catalog, normalized_from_raw, normalized_to_mm,
                              raw_to_estimated_mm, recognized_travel)
 from host.mcp_configuration import make_studio_profile, parse_studio_profile
 from host.mcp_diagnostics import capture_key_timing, capture_sensors, capability_summary
-from host.protocol import (CAP_HALL_CURVE, ProtocolError, decode_key, encode_key,
+from host.protocol import (CAP_HALL_CURVE, CAP_WISH_CURVE, CURVE_WISH_OWLAB_TI, ProtocolError, decode_key, encode_key,
                            key_record, MUTATIONS, OUTPUT, SET_KEY, CAP_CUSTOM_CURVE,
                            CUSTOM_CURVE_IDENTITY, encode_custom_curve, decode_custom_curve,
                            require_key_capability)
@@ -55,7 +55,7 @@ class HallCurveTests(unittest.TestCase):
             legacy = {k: v for k, v in key.items() if k not in omitted}
             self.assertEqual(key_record(legacy), key)
             self.assertEqual(encode_key(legacy)[16:], bytes(6))
-        for value in (True, -1, 3, 1.0, None):
+        for value in (True, -1, 4, 1.0, None):
             with self.assertRaises(ProtocolError):
                 key_record({**key, "curve_id": value})
         encoded = encode_key({**key, "curve_id": 1})
@@ -123,6 +123,63 @@ class HallCurveTests(unittest.TestCase):
         self.assertEqual(travel[0], 3.4)
         self.assertEqual(travel[1], 4.0)
 
+    def test_wish_curve_selection_and_legacy_import_preflight(self):
+        curve = CURVE_WISH_OWLAB_TI
+        old_caps = CAP_HALL_CURVE | CAP_CUSTOM_CURVE
+        transport, client, _, tools = setup_tools(capabilities=old_caps)
+        profile = deepcopy(transport.profile)
+        profile["keys"][-1]["curve_id"] = curve
+        studio = make_studio_profile(profile, [3.4] * 14)
+        self.assertEqual(parse_studio_profile(studio)[0], profile)
+        for operation in (lambda: client.set_key(profile["keys"][-1]),
+                          lambda: client.import_profile(profile),
+                          lambda: tools["keyboard_set_keys"]([1, 8], {"curve_id": curve}),
+                          lambda: tools["keyboard_import_studio_profile"](studio)):
+            with self.assertRaisesRegex(ProtocolError, "0x04000000"):
+                operation()
+            self.assertEqual(transport.mutations(), [])
+        transport.capabilities |= CAP_WISH_CURVE
+        original = deepcopy(transport.profile)
+        applied = tools["keyboard_set_keys"]([1, 8], {"curve_id": curve})
+        original["keys"][1]["curve_id"] = original["keys"][8]["curve_id"] = curve
+        self.assertEqual(applied["profile"], original)
+        self.assertEqual(client.get_config(), original)
+
+    def test_wish_model_nodes_and_status_distance(self):
+        from tools.wish_owlab_curve import signal_knots
+        self.assertEqual(WISH_OWLAB_SIGNAL_Q15, signal_knots())
+        for i, signal in enumerate(WISH_OWLAB_SIGNAL_Q15):
+            distance = (i * 10000 + 16) // 32
+            self.assertEqual(normalized_from_raw(signal, 0, 32767, CURVE_WISH_OWLAB_TI), distance)
+            self.assertEqual(normalized_from_raw(32767 - signal, 32767, 0, CURVE_WISH_OWLAB_TI), distance)
+        self.assertEqual(normalized_from_raw(65534, 0, 65535, CURVE_WISH_OWLAB_TI), 10000)
+        clock = Clock()
+        client = Client(clock)
+        profile = defaults()
+        profile["keys"][9].update(flags=7, released=1000, pressed=3000, curve_id=CURVE_WISH_OWLAB_TI)
+        client.get_config = lambda: profile
+        capture = capture_key_timing(client, 9, .2, 100, total_travel_mm=3.4,
+                                     clock=clock.clock, delay=clock.delay)
+        down = next(row for row in capture["samples"] if row["travel"] == 5000)
+        self.assertEqual(down["travel_mm"], 1.7)
+        self.assertEqual(down["raw_estimated_mm"], raw_to_estimated_mm(2000, profile["keys"][9], 3.4))
+
+    def test_capture_mixed_drawn_and_wish_keys(self):
+        clock = Clock()
+        client = SensorClient(clock)
+        profile = defaults()
+        for i, key in enumerate(profile["keys"]):
+            key.update(flags=7, released=800, pressed=3000, curve_id=2 if i == 0 else CURVE_WISH_OWLAB_TI)
+        client.get_config = lambda: profile
+        client.custom_curve = lambda: CUSTOM_CURVE_IDENTITY
+        client.info = lambda: dict(board_rev=86, generation=1, config_crc=123)
+        result = capture_sensors(client, .2, 10, True, total_travel_mm=[3.4] * 14,
+                                 clock=clock.clock, delay=clock.delay)
+        sample = result["samples"][0]
+        for i, key in enumerate(profile["keys"]):
+            self.assertEqual(sample["raw_estimated_mm"][i],
+                             raw_to_estimated_mm(sample["raw"][i], key, 3.4, CUSTOM_CURVE_IDENTITY))
+
     def test_status_distance_is_scaled_once_while_raw_estimate_uses_curve(self):
         clock = Clock()
         client = Client(clock)
@@ -186,7 +243,7 @@ class CustomCurveTest(unittest.TestCase):
             require_key_capability(key, CAP_HALL_CURVE)
         require_key_capability(key, CAP_HALL_CURVE | CAP_CUSTOM_CURVE)
         with self.assertRaises(ProtocolError):
-            key_record({**key, "curve_id": 3})
+            key_record({**key, "curve_id": 4})
 
     def test_sampled_rt_uses_the_table(self):
         key = dict(key=0, flags=7, released=1000, pressed=3000, actuation=2000, rt_press=1000,

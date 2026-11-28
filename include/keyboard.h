@@ -22,7 +22,10 @@ enum { C77_CAP_CUSTOM_CURVE=0x200000, C77_OP_CUSTOM_CURVE=0x4C, C77_CURVE_BYTES=
  * rises linearly to (1+A)x at 40 detents/s. Other inputs keep it 0. */
 enum { C77_BINDING_POINTER=7, C77_CAP_POINTER=0x400000, C77_POINTER_MAX=4000,
        C77_CAP_POINTER_ACCEL=0x800000, C77_POINTER_ACCEL_MAX=15 };
-typedef struct { uint16_t released,pressed,actuation,rt_press,rt_release,top_deadzone,noise,bottom_deadzone,curve_id; uint8_t flags; } c77_key_config;
+/* Extended GET/SET_KEY uses the old reserved LE u16 at offset 20. */
+enum { C77_CAP_FIXED_RELEASE=0x02000000, C77_OP_EXT_KEY=0x4E };
+enum { C77_CAP_WISH_CURVE=0x04000000 };
+typedef struct { uint16_t released,pressed,actuation,rt_press,rt_release,top_deadzone,noise,bottom_deadzone,curve_id,fixed_release; uint8_t flags; } c77_key_config;
 /* Chords pack the first two usages into code, low byte first. A zero
  * third_key means the chord has two ordinary keys. */
 typedef struct { uint16_t code; uint8_t kind,modifiers,third_key; } c77_binding;
@@ -39,9 +42,10 @@ typedef struct { c77_key_config keys[C77_HALL]; c77_binding bindings[C77_INPUTS]
  * means a host-chosen default). */
 enum { C77_PROFILES=4, C77_PROFILE_NAME_BYTES=16, C77_PROFILE_KEY_FLAGS=0x02|C77_KEY_RETRIGGER,
        C77_PROFILE_BYTES=C77_HALL*11+C77_INPUTS*6+C77_PROFILE_NAME_BYTES,
-       C77_PROFILE_BANK_BYTES=2+C77_PROFILES*C77_PROFILE_BYTES,
+       C77_V80_BANK_BYTES=2+C77_PROFILES*C77_PROFILE_BYTES,
+       C77_PROFILE_BANK_BYTES=C77_V80_BANK_BYTES+2*C77_PROFILES*C77_HALL,
        C77_OP_PROFILE=0x4D, C77_CAP_PROFILES=0x1000000 };
-typedef struct { uint16_t actuation,rt_press,rt_release,top_deadzone,bottom_deadzone; uint8_t flags; } c77_profile_key;
+typedef struct { uint16_t actuation,rt_press,rt_release,top_deadzone,bottom_deadzone,fixed_release; uint8_t flags; } c77_profile_key;
 typedef struct { c77_profile_key keys[C77_HALL]; c77_binding bindings[C77_INPUTS]; uint8_t name[C77_PROFILE_NAME_BYTES]; } c77_profile;
 typedef struct { uint8_t active,used; c77_profile slots[C77_PROFILES]; } c77_profile_bank;
 typedef struct {
@@ -104,7 +108,7 @@ void c77_profiles_init(c77_profile_bank *bank,const c77_config *cfg);
 bool c77_profile_name_valid(const uint8_t name[C77_PROFILE_NAME_BYTES]);
 bool c77_profiles_valid(const c77_profile_bank *bank,const c77_config *cfg);
 void c77_profiles_encode(const c77_profile_bank *bank,uint8_t out[C77_PROFILE_BANK_BYTES]);
-bool c77_profiles_decode(c77_profile_bank *bank,const uint8_t in[C77_PROFILE_BANK_BYTES],const c77_config *cfg);
+bool c77_profiles_decode(c77_profile_bank *bank,const uint8_t *in,size_t length,const c77_config *cfg);
 /* Decode a 0..1000-unit record written by firmware <=0.3.42 into 0..10000 units. */
 bool c77_config_decode_legacy(c77_config *cfg,const uint8_t in[C77_CONFIG_BYTES]);
 void c77_engine_init(c77_engine *e,const c77_config *cfg,uint32_t generation,bool stored);

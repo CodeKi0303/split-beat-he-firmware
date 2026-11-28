@@ -14,6 +14,8 @@ from host.protocol import TRAVEL_MAX
 def main():
     exe = compile_target("hall_curve_vectors", [ROOT / "src/rapid_trigger.c", ROOT / "tests/hall_curve_vectors.c"])
     vectors = json.loads(subprocess.check_output([str(exe)], text=True))
+    curve_ids = sorted({v["curve_id"] for v in vectors})
+    assert curve_ids == [0, 1, 2, 3], "Verify every supported curve against the real core"
     count = 0
     for v in vectors:
         values = v["travel"]
@@ -27,7 +29,7 @@ def main():
             assert actual == expected, (v["released"], v["pressed"], v["curve_id"], raw, expected, actual)
             if v["curve_id"] == 2 and v["custom_curve"] == [(i + 1) * 625 for i in range(15)]:
                 assert actual == normalized_from_raw(raw, v["released"], v["pressed"], 0)
-            if v["curve_id"] == 1:
+            if v["curve_id"] in (1, 3):
                 at34 = raw_to_estimated_mm(raw, key, 3.4)
                 at40 = raw_to_estimated_mm(raw, key, 4.0)
                 assert abs(at40 - at34 * 4 / 3.4) < 1e-12
@@ -36,7 +38,7 @@ def main():
     path.write_text(json.dumps(vectors), encoding="utf-8")
     if os.environ.get('SPLIT_BEAT_STUDIO'):
         subprocess.run(["node", "tests/hall_curve_parity.mjs", str(path)], cwd=ROOT, check=True)
-    report = {"status":"PASS", "sample_count_per_language":count, "endpoint_cases":6, "curve_ids":[0,1,2], "custom_tables":["identity","gentle-top"], "physical_device_access":False, "physical_mm_accuracy_validated":False}
+    report = {"status":"PASS", "sample_count_per_language":count, "endpoint_cases":6, "curve_ids":curve_ids, "custom_tables":["identity","gentle-top"], "physical_device_access":False, "physical_mm_accuracy_validated":False}
     (ROOT / "build/host/hall-curve-parity.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
     print(f"C -> Python Hall curve parity PASS: {count} samples; monotonicity and proportional travel checked")
 

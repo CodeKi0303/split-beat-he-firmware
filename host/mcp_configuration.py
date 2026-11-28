@@ -19,10 +19,10 @@ from .default_bindings import default_bindings
 from .hall_curve import curve_catalog
 from .protocol import (
     CAP_FINE_TRAVEL, CAP_KEY_CHORD, CAP_POINTER, POINTER_MAX, CAP_POINTER_ACCEL, POINTER_ACCEL_MAX, CAP_RETRIGGER_BEFORE_RELEASE, DEFAULTS, LEGACY_TRAVEL_SCALE, ProtocolError, TRAVEL_MAX,
-    binding_record, integer, key_record, require_binding_capability, require_key_capability, validate_profile,
+    CAP_FIXED_RELEASE, CURVE_WISH_OWLAB_TI, binding_record, integer, key_record, require_binding_capability, require_key_capability, validate_profile,
 )
 
-DISTANCES = ("actuation", "rt_press", "rt_release", "top_deadzone", "bottom_deadzone")
+DISTANCES = ("actuation", "rt_press", "rt_release", "top_deadzone", "bottom_deadzone", "fixed_release")
 PATCH_FIELDS = {*DISTANCES, "noise_deadband", "enabled", "rapid_trigger", "retrigger_before_release", "curve_id"}
 POSITION_NAMES = ("CAPS", "Q", "W", "E", "R", "SHIFT", "SPACE")
 
@@ -74,7 +74,7 @@ def propose_keys(profile, keys, patch, *, unit="normalized", travel_mm=None, cap
     if unit not in ("normalized", "mm"):
         raise ProtocolError("unit must be normalized or mm")
     if not isinstance(patch, dict) or not patch or not set(patch) <= PATCH_FIELDS:
-        raise ProtocolError("Patch supports only actuation, rt_press, rt_release, top_deadzone, bottom_deadzone, noise_deadband, enabled, rapid_trigger, retrigger_before_release, curve_id")
+        raise ProtocolError(f"Unsupported patch fields; choose from {', '.join(sorted(PATCH_FIELDS))}")
     travel = validate_travel(travel_mm if travel_mm is not None else [4.0] * 14)
     integer(capabilities, 0, 0xffffffff, "capabilities")
     for name in ("enabled", "rapid_trigger", "retrigger_before_release"):
@@ -83,7 +83,7 @@ def propose_keys(profile, keys, patch, *, unit="normalized", travel_mm=None, cap
     if "noise_deadband" in patch:
         integer(patch["noise_deadband"], 0, 100, "noise_deadband")
     if "curve_id" in patch:
-        integer(patch["curve_id"], 0, 1, "curve_id")
+        integer(patch["curve_id"], 0, CURVE_WISH_OWLAB_TI, "curve_id")
     for name in DISTANCES:
         if name in patch:
             if unit == "mm":
@@ -99,7 +99,7 @@ def propose_keys(profile, keys, patch, *, unit="normalized", travel_mm=None, cap
         total = Decimal(str(travel[key]))
         if unit == "mm":
             values = {name: Decimal(str(patch[name])) if name in patch
-                      else Decimal(old[name]) * total / TRAVEL_MAX for name in DISTANCES}
+                      else Decimal(old.get(name, 0)) * total / TRAVEL_MAX for name in DISTANCES}
             if any(values[name] > total for name in DISTANCES):
                 raise ProtocolError(f"Hall {key}: distance exceeds total travel {total} mm")
             if values["top_deadzone"] >= values["actuation"] or values["actuation"] + values["bottom_deadzone"] > total:
@@ -111,6 +111,8 @@ def propose_keys(profile, keys, patch, *, unit="normalized", travel_mm=None, cap
             if name in patch:
                 record[name] = (int((Decimal(str(patch[name])) * TRAVEL_MAX / total / step).quantize(Decimal("1"), rounding=ROUND_HALF_UP)) * step
                                 if unit == "mm" else patch[name])
+        if patch.get("fixed_release") and not record.get("fixed_release"):
+            raise ProtocolError("Requested fixed_release is below the firmware distance step")
         if "noise_deadband" in patch:
             record["noise_deadband"] = patch["noise_deadband"]
         if "curve_id" in patch:
@@ -179,7 +181,7 @@ def apply_records(client, original, *, keys=None, bindings=None, expected_finger
             if group == "keys" and not allow_calibration:
                 if any(record[name] != old[name] for name in ("released", "pressed")) or (record["flags"] & 4) != (old["flags"] & 4):
                     raise ProtocolError("Performance changes cannot alter measured calibration")
-                if not old["flags"] & 4 and any(record[name] != old[name] for name in DISTANCES):
+                if not old["flags"] & 4 and any(record.get(name, 0) != old.get(name, 0) for name in DISTANCES):
                     raise ProtocolError("Calibrate before changing distances")
                 if record["flags"] & 1 and not old["flags"] & 1 and not record["flags"] & 4:
                     raise ProtocolError("Calibrate before enabling")
@@ -409,7 +411,9 @@ def key_options(record):
     return dict(key=record["key"], enabled=bool(record["flags"] & 1),
                 rapid_trigger=bool(record["flags"] & 2),
                 retrigger_before_release=bool(record["flags"] & 8),
-                retrigger_active=bool(record["flags"] & 15 == 15))
+                retrigger_active=bool(record["flags"] & 15 == 15),
+                fixed_release=record.get("fixed_release", 0),
+                fixed_release_threshold=record.get("fixed_release") or record["actuation"])
 
 
 def register_configuration_tools(server, session, read, write, guard):
@@ -423,12 +427,13 @@ def register_configuration_tools(server, session, read, write, guard):
         return dict(keys=[key_options(profile["keys"][key]) for key in ids],
                     retrigger_supported=bool(info["capabilities"] & CAP_RETRIGGER_BEFORE_RELEASE),
                     retrigger_default=False,
+                    fixed_release_supported=bool(info["capabilities"] & CAP_FIXED_RELEASE),
                     note="Synthetic USB release/press interrupts long notes. Option is inactive while RT is off. STATUS snapshots do not expose the USB pulse.")
 
     @server.tool(annotations=read, structured_output=True)
     @guard
     def keyboard_curve_catalog() -> dict[str, Any]:
-        """List linear and approximate Owlab Ti HE nonlinear profiles, stroke scaling, provenance and firmware requirements. No device access or changes."""
+        """List Hall distance curves, model parameters, stroke scaling and required capabilities. Includes the WISH-style Owlab Ti HE model. Reads no device."""
         return curve_catalog()
 
     @server.tool(annotations=read, structured_output=True)
@@ -462,14 +467,14 @@ def register_configuration_tools(server, session, read, write, guard):
     @server.tool(annotations=read, structured_output=True)
     @guard
     def keyboard_preview_keys(keys: list[StrictInt], patch: dict, unit: str = "normalized") -> dict[str, Any]:
-        """Preview a partial Hall-settings patch without writes. unit normalized(0..10000 integers; multiples of10 on firmware before0.3.43) or mm(0.001 increments using session stroke; firmware before0.3.43 rounds to its 1/1000 stroke step). Return fingerprint for optimistic apply. Valid patch fields: actuation,rt_press,rt_release,top_deadzone,bottom_deadzone,noise_deadband,enabled,rapid_trigger,retrigger_before_release,curve_id(0 linear,1 approximate Owlab Ti HE). Nonzero curve requires capability0x200. retrigger_before_release is a strict boolean, needs capability0x40000 and sends release/press pulses while RT remains held, breaking long notes. See keyboard_curve_catalog."""
+        """Preview a partial Hall-settings patch without writes. unit normalized(0..10000 integers; multiples of10 on firmware before0.3.43) or mm(0.001 increments using session stroke; firmware before0.3.43 rounds to its 1/1000 stroke step). Return fingerprint for optimistic apply. Valid patch fields: actuation,fixed_release (0 links to actuation, used with RT off),rt_press,rt_release,top_deadzone,bottom_deadzone,noise_deadband,enabled,rapid_trigger,retrigger_before_release,curve_id (0 linear, 1 Owlab Ti reference, 2 shared drawn table, 3 WISH-style Owlab Ti HE model). Check keyboard_curve_catalog for curve-specific capabilities and stroke. retrigger_before_release is a strict boolean, needs capability0x40000 and sends release/press pulses while RT remains held, breaking long notes."""
         client = session.require_client()
         original = client.get_config()
         info = client.info()
         proposed = propose_keys(original, keys, patch, unit=unit, travel_mm=session.travel_mm, capabilities=info["capabilities"])
         return dict(fingerprint=profile_fingerprint(original), proposed_keys=proposed,
                     proposed_options=[key_options(record) for record in proposed],
-                    effective_mm=[{"key": key["key"], **{field: key[field] * session.travel_mm[key["key"]] / TRAVEL_MAX for field in DISTANCES}} for key in proposed],
+                    effective_mm=[{"key": key["key"], **{field: key.get(field, key["actuation"]) * session.travel_mm[key["key"]] / TRAVEL_MAX for field in DISTANCES}} for key in proposed],
                     device_written=False, note="Only patched fields change; measured endpoints and mappings stay per key. Curve changes alter RT/AP distance behavior without automatically changing numeric thresholds; mm is a travel-scaled estimate.")
 
     @server.tool(annotations=write, structured_output=True)
